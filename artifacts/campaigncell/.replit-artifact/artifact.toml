@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "CampaignCell"
+version = "1.0.0"
+id = "artifacts/campaigncell"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23512
+
+[services.development]
+run = "pnpm --filter @workspace/campaigncell run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/campaigncell", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/campaigncell/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23512"
+BASE_PATH = "/"

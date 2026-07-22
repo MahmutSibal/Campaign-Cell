@@ -1,0 +1,2153 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: CampaignCell API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: campaigns
+    description: Campaign management
+  - name: cases
+    description: Optimization case management
+  - name: subscribers
+    description: Subscriber profiles
+  - name: ai
+    description: AI analysis and predictions
+  - name: gamification
+    description: Points, badges, leaderboard
+  - name: analytics
+    description: Dashboard analytics and KPIs
+  - name: experiments
+    description: A/B test experiments
+  - name: audit
+    description: Audit logs
+  - name: users
+    description: User/staff management
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── AUTH ───────────────────────────────────────────────────────────────────
+  /v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with GSM + OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /v1/auth/request-otp:
+    post:
+      operationId: requestOtp
+      tags: [auth]
+      summary: Request OTP for GSM number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpRequestInput"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpRequestResponse"
+
+  /v1/auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenInput"
+      responses:
+        "200":
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout and revoke refresh token
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /v1/auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  # ─── CAMPAIGNS ──────────────────────────────────────────────────────────────
+  /v1/campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      summary: List campaigns
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: segment
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignListResponse"
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      summary: Create a new campaign
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignInput"
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  /v1/campaigns/{id}:
+    get:
+      operationId: getCampaign
+      tags: [campaigns]
+      summary: Get campaign by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns]
+      summary: Update campaign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignUpdate"
+      responses:
+        "200":
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      summary: Delete campaign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /v1/campaigns/{id}/analyze:
+    post:
+      operationId: analyzeCampaign
+      tags: [campaigns]
+      summary: Trigger AI analysis for campaign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAnalysisResult"
+
+  /v1/campaigns/{id}/publish:
+    post:
+      operationId: publishCampaign
+      tags: [campaigns]
+      summary: Publish a campaign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  /v1/campaigns/{id}/archive:
+    post:
+      operationId: archiveCampaign
+      tags: [campaigns]
+      summary: Archive a campaign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+
+  # ─── OPTIMIZATION CASES ─────────────────────────────────────────────────────
+  /v1/cases:
+    get:
+      operationId: listCases
+      tags: [cases]
+      summary: List optimization cases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of optimization cases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseListResponse"
+
+  /v1/cases/{id}:
+    get:
+      operationId: getCase
+      tags: [cases]
+      summary: Get optimization case detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Case detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptimizationCase"
+    patch:
+      operationId: updateCase
+      tags: [cases]
+      summary: Update optimization case
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseUpdate"
+      responses:
+        "200":
+          description: Case updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptimizationCase"
+
+  /v1/cases/{id}/assign:
+    post:
+      operationId: assignCase
+      tags: [cases]
+      summary: Assign case to an expert
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseAssignInput"
+      responses:
+        "200":
+          description: Case assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptimizationCase"
+
+  /v1/cases/{id}/complete:
+    post:
+      operationId: completeCase
+      tags: [cases]
+      summary: Mark case as completed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseCompleteInput"
+      responses:
+        "200":
+          description: Case completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptimizationCase"
+
+  /v1/cases/{id}/notes:
+    post:
+      operationId: addCaseNote
+      tags: [cases]
+      summary: Add optimization note to case
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseNoteInput"
+      responses:
+        "201":
+          description: Note added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseNote"
+
+  # ─── SUBSCRIBERS ────────────────────────────────────────────────────────────
+  /v1/subscribers:
+    get:
+      operationId: listSubscribers
+      tags: [subscribers]
+      summary: List subscribers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: segment
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subscriber list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriberListResponse"
+
+  /v1/subscribers/{id}:
+    get:
+      operationId: getSubscriber
+      tags: [subscribers]
+      summary: Get subscriber 360 profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Subscriber profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriberProfile"
+
+  /v1/subscribers/{id}/campaigns:
+    get:
+      operationId: getSubscriberCampaigns
+      tags: [subscribers]
+      summary: Get campaigns for a subscriber (personalized offers)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Personalized campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriberCampaignListResponse"
+
+  /v1/subscribers/{id}/offers/{campaignId}/accept:
+    post:
+      operationId: acceptOffer
+      tags: [subscribers]
+      summary: Subscriber accepts a campaign offer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Offer accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /v1/subscribers/{id}/offers/{campaignId}/reject:
+    post:
+      operationId: rejectOffer
+      tags: [subscribers]
+      summary: Subscriber rejects a campaign offer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferRejectInput"
+      responses:
+        "200":
+          description: Offer rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  /v1/subscribers/{id}/offers/{campaignId}/rate:
+    post:
+      operationId: rateOffer
+      tags: [subscribers]
+      summary: Subscriber rates a campaign (1-5 stars)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferRatingInput"
+      responses:
+        "200":
+          description: Rating submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+
+  # ─── AI ─────────────────────────────────────────────────────────────────────
+  /v1/ai/predict:
+    post:
+      operationId: aiPredict
+      tags: [ai]
+      summary: Run AI recommendation + segmentation for campaign/subscriber
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPredictInput"
+      responses:
+        "200":
+          description: AI prediction result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPredictionDetail"
+
+  /v1/ai/predictions:
+    get:
+      operationId: listPredictions
+      tags: [ai]
+      summary: List AI predictions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Predictions list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionListResponse"
+
+  /v1/ai/accuracy:
+    get:
+      operationId: getAiAccuracy
+      tags: [ai]
+      summary: Get AI accuracy metrics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: AI accuracy metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAccuracyMetrics"
+
+  /v1/ai/expert-assignment:
+    post:
+      operationId: assignExpertAi
+      tags: [ai]
+      summary: AI-driven expert assignment for a case
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpertAssignmentInput"
+      responses:
+        "200":
+          description: Recommended expert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpertAssignmentResult"
+
+  # ─── GAMIFICATION ────────────────────────────────────────────────────────────
+  /v1/game/leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [gamification]
+      summary: Get expert leaderboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, all_time]
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+
+  /v1/game/profile/{userId}:
+    get:
+      operationId: getGameProfile
+      tags: [gamification]
+      summary: Get gamification profile for a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Game profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameProfile"
+
+  /v1/game/badges:
+    get:
+      operationId: listBadges
+      tags: [gamification]
+      summary: List all available badges
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Badges list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadgeListResponse"
+
+  /v1/game/points-history/{userId}:
+    get:
+      operationId: getPointsHistory
+      tags: [gamification]
+      summary: Get points transaction history for a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Points history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointsHistoryResponse"
+
+  # ─── ANALYTICS ──────────────────────────────────────────────────────────────
+  /v1/analytics/dashboard:
+    get:
+      operationId: getDashboardKpis
+      tags: [analytics]
+      summary: Get supervisor/admin dashboard KPIs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardKpis"
+
+  /v1/analytics/conversion-trend:
+    get:
+      operationId: getConversionTrend
+      tags: [analytics]
+      summary: Get conversion rate trend over time
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversion trend data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendDataResponse"
+
+  /v1/analytics/campaign-distribution:
+    get:
+      operationId: getCampaignDistribution
+      tags: [analytics]
+      summary: Campaign distribution by segment and type
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Distribution data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DistributionDataResponse"
+
+  /v1/analytics/expert-performance:
+    get:
+      operationId: getExpertPerformance
+      tags: [analytics]
+      summary: Expert performance metrics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Expert performance data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpertPerformanceResponse"
+
+  /v1/analytics/sla-compliance:
+    get:
+      operationId: getSlaCompliance
+      tags: [analytics]
+      summary: SLA compliance statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: SLA compliance data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaComplianceResponse"
+
+  /v1/analytics/expert-kpis:
+    get:
+      operationId: getExpertKpis
+      tags: [analytics]
+      summary: Get KPIs for the logged-in campaign expert
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Expert KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpertKpis"
+
+  # ─── A/B EXPERIMENTS ────────────────────────────────────────────────────────
+  /v1/experiments:
+    get:
+      operationId: listExperiments
+      tags: [experiments]
+      summary: List A/B experiments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: campaignId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiments list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentListResponse"
+    post:
+      operationId: createExperiment
+      tags: [experiments]
+      summary: Create A/B experiment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExperimentInput"
+      responses:
+        "201":
+          description: Experiment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+
+  /v1/experiments/{id}:
+    get:
+      operationId: getExperiment
+      tags: [experiments]
+      summary: Get A/B experiment detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+
+  /v1/experiments/{id}/conclude:
+    post:
+      operationId: concludeExperiment
+      tags: [experiments]
+      summary: Conclude an A/B experiment and pick winner
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExperimentConcludeInput"
+      responses:
+        "200":
+          description: Experiment concluded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+
+  # ─── AUDIT LOGS ─────────────────────────────────────────────────────────────
+  /v1/audit:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      summary: List audit logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: resource
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+
+  # ─── USERS ──────────────────────────────────────────────────────────────────
+  /v1/users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List staff users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create staff account (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /v1/users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateInput"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /v1/users/{id}/lock:
+    post:
+      operationId: lockUser
+      tags: [users]
+      summary: Lock user account
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /v1/users/{id}/unlock:
+    post:
+      operationId: unlockUser
+      tags: [users]
+      summary: Unlock user account
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    SuccessMessage:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    # ── AUTH SCHEMAS ──────────────────────────────────────────────────────────
+    LoginInput:
+      type: object
+      required: [gsmNumber, otp]
+      properties:
+        gsmNumber:
+          type: string
+        otp:
+          type: string
+
+    OtpRequestInput:
+      type: object
+      required: [gsmNumber]
+      properties:
+        gsmNumber:
+          type: string
+
+    OtpRequestResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    RefreshTokenInput:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    UserProfile:
+      type: object
+      required: [id, name, email, role, gsmNumber]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [SUBSCRIBER, CAMPAIGN_EXPERT, SUPERVISOR, ADMIN]
+        gsmNumber:
+          type: string
+        isLocked:
+          type: boolean
+        createdAt:
+          type: string
+
+    # ── USER SCHEMAS ──────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, name, email, role, gsmNumber, isLocked, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [SUBSCRIBER, CAMPAIGN_EXPERT, SUPERVISOR, ADMIN]
+        gsmNumber:
+          type: string
+        expertise:
+          type: ["string", "null"]
+        region:
+          type: ["string", "null"]
+        isLocked:
+          type: boolean
+        createdAt:
+          type: string
+        lastLoginAt:
+          type: ["string", "null"]
+
+    UserCreateInput:
+      type: object
+      required: [name, email, gsmNumber, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        gsmNumber:
+          type: string
+        role:
+          type: string
+          enum: [SUBSCRIBER, CAMPAIGN_EXPERT, SUPERVISOR, ADMIN]
+        expertise:
+          type: string
+        region:
+          type: string
+
+    UserUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [SUBSCRIBER, CAMPAIGN_EXPERT, SUPERVISOR, ADMIN]
+        expertise:
+          type: string
+        region:
+          type: string
+
+    UserListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ── CAMPAIGN SCHEMAS ──────────────────────────────────────────────────────
+    Campaign:
+      type: object
+      required: [id, name, type, status, segment, priority, discount, startDate, endDate, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        type:
+          type: string
+          enum: [EK_PAKET, TARIFE_YUKSELTME, CIHAZ_FIRSATI, SADAKAT]
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, MANUAL_OPTIMIZATION_REQUIRED, OPTIMIZING, AB_TESTING, OPTIMIZED, PUBLISHED, ARCHIVED]
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        priority:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        discount:
+          type: number
+        startDate:
+          type: string
+        endDate:
+          type: string
+        recommendationScore:
+          type: ["number", "null"]
+        conversionProbability:
+          type: ["number", "null"]
+        aiReasoning:
+          type: ["string", "null"]
+        isAiAnalyzed:
+          type: boolean
+        conversionRate:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CampaignInput:
+      type: object
+      required: [name, type, discount, startDate, endDate]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [EK_PAKET, TARIFE_YUKSELTME, CIHAZ_FIRSATI, SADAKAT]
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        discount:
+          type: number
+        startDate:
+          type: string
+        endDate:
+          type: string
+
+    CampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        priority:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        discount:
+          type: number
+
+    CampaignListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Campaign"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    AiAnalysisResult:
+      type: object
+      required: [success, aiAvailable]
+      properties:
+        success:
+          type: boolean
+        aiAvailable:
+          type: boolean
+        message:
+          type: ["string", "null"]
+        campaign:
+          $ref: "#/components/schemas/Campaign"
+
+    # ── OPTIMIZATION CASE SCHEMAS ─────────────────────────────────────────────
+    OptimizationCase:
+      type: object
+      required: [id, caseCode, campaignId, status, priority, segment, slaDeadline, createdAt]
+      properties:
+        id:
+          type: string
+        caseCode:
+          type: string
+        campaignId:
+          type: string
+        campaignName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [CREATED, ASSIGNED, OPTIMIZING, AB_TESTING, OPTIMIZED, PUBLISHED, ARCHIVED]
+        priority:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        assignedExpertId:
+          type: ["string", "null"]
+        assignedExpertName:
+          type: ["string", "null"]
+        aiScore:
+          type: ["number", "null"]
+        conversionProbability:
+          type: ["number", "null"]
+        aiReasoning:
+          type: ["string", "null"]
+        optimizationNote:
+          type: ["string", "null"]
+        slaDeadline:
+          type: string
+        slaBreached:
+          type: boolean
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseNote"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CaseListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptimizationCase"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    CaseUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [CREATED, ASSIGNED, OPTIMIZING, AB_TESTING, OPTIMIZED, PUBLISHED, ARCHIVED]
+        priority:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+
+    CaseAssignInput:
+      type: object
+      required: [expertId]
+      properties:
+        expertId:
+          type: string
+
+    CaseCompleteInput:
+      type: object
+      required: [optimizationNote]
+      properties:
+        optimizationNote:
+          type: string
+
+    CaseNoteInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    CaseNote:
+      type: object
+      required: [id, caseId, authorId, authorName, content, createdAt]
+      properties:
+        id:
+          type: string
+        caseId:
+          type: string
+        authorId:
+          type: string
+        authorName:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+
+    # ── SUBSCRIBER SCHEMAS ────────────────────────────────────────────────────
+    Subscriber:
+      type: object
+      required: [id, name, gsmNumber, segment, tariff, monthlySpend, dataUsageGb, voiceMinutes, churnRisk, valueScore, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        gsmNumber:
+          type: string
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        tariff:
+          type: string
+        monthlySpend:
+          type: number
+        dataUsageGb:
+          type: number
+        voiceMinutes:
+          type: integer
+        churnRisk:
+          type: number
+        valueScore:
+          type: number
+        acceptedCampaigns:
+          type: integer
+        rejectedCampaigns:
+          type: integer
+        createdAt:
+          type: string
+
+    SubscriberProfile:
+      type: object
+      required: [subscriber, campaigns]
+      properties:
+        subscriber:
+          $ref: "#/components/schemas/Subscriber"
+        campaigns:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriberCampaign"
+
+    SubscriberCampaign:
+      type: object
+      required: [id, campaignId, name, type, discount, recommendationScore, conversionProbability, aiReasoning, status]
+      properties:
+        id:
+          type: string
+        campaignId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        discount:
+          type: number
+        validUntil:
+          type: ["string", "null"]
+        recommendationScore:
+          type: number
+        conversionProbability:
+          type: number
+        aiReasoning:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED, RATED]
+        rating:
+          type: ["integer", "null"]
+        rejectionReason:
+          type: ["string", "null"]
+
+    SubscriberListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subscriber"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    SubscriberCampaignListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriberCampaign"
+
+    OfferRejectInput:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+
+    OfferRatingInput:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+
+    # ── AI SCHEMAS ────────────────────────────────────────────────────────────
+    AiPredictInput:
+      type: object
+      required: [campaignId, subscriberId]
+      properties:
+        campaignId:
+          type: string
+        subscriberId:
+          type: string
+
+    AiPredictionDetail:
+      type: object
+      required: [id, campaignId, subscriberId, recommendationScore, conversionProbability, segment, priority, reasoning, createdAt]
+      properties:
+        id:
+          type: string
+        campaignId:
+          type: string
+        subscriberId:
+          type: string
+        recommendationScore:
+          type: number
+        conversionProbability:
+          type: number
+        segment:
+          type: string
+          enum: [YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ]
+        priority:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        reasoning:
+          type: string
+        isAiMisclassified:
+          type: boolean
+        createdAt:
+          type: string
+
+    PredictionListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiPredictionDetail"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    AiAccuracyMetrics:
+      type: object
+      required: [overallAccuracy, totalPredictions, correctPredictions, bySegment]
+      properties:
+        overallAccuracy:
+          type: number
+        totalPredictions:
+          type: integer
+        correctPredictions:
+          type: integer
+        misclassified:
+          type: integer
+        bySegment:
+          type: array
+          items:
+            $ref: "#/components/schemas/SegmentAccuracy"
+
+    SegmentAccuracy:
+      type: object
+      required: [segment, accuracy, total, correct]
+      properties:
+        segment:
+          type: string
+        accuracy:
+          type: number
+        total:
+          type: integer
+        correct:
+          type: integer
+
+    ExpertAssignmentInput:
+      type: object
+      required: [caseId]
+      properties:
+        caseId:
+          type: string
+
+    ExpertAssignmentResult:
+      type: object
+      required: [expertId, expertName, assignmentScore, reasoning]
+      properties:
+        expertId:
+          type: string
+        expertName:
+          type: string
+        assignmentScore:
+          type: number
+        reasoning:
+          type: string
+
+    # ── GAMIFICATION SCHEMAS ──────────────────────────────────────────────────
+    LeaderboardEntry:
+      type: object
+      required: [rank, userId, name, points, level, completedCases]
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: string
+        name:
+          type: string
+        points:
+          type: integer
+        level:
+          type: string
+          enum: [BRONZE, SILVER, GOLD, PLATINUM]
+        completedCases:
+          type: integer
+        badges:
+          type: integer
+
+    LeaderboardResponse:
+      type: object
+      required: [period, entries]
+      properties:
+        period:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+
+    Badge:
+      type: object
+      required: [id, name, description, icon, requirement]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        icon:
+          type: string
+        requirement:
+          type: string
+        earnedAt:
+          type: ["string", "null"]
+
+    BadgeListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Badge"
+
+    GameProfile:
+      type: object
+      required: [userId, name, totalPoints, level, rank, badges, completedCases, averagePerformance]
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        totalPoints:
+          type: integer
+        level:
+          type: string
+          enum: [BRONZE, SILVER, GOLD, PLATINUM]
+        rank:
+          type: integer
+        dailyRank:
+          type: ["integer", "null"]
+        weeklyRank:
+          type: ["integer", "null"]
+        badges:
+          type: array
+          items:
+            $ref: "#/components/schemas/Badge"
+        completedCases:
+          type: integer
+        averagePerformance:
+          type: number
+
+    PointsTransaction:
+      type: object
+      required: [id, userId, points, reason, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        points:
+          type: integer
+        reason:
+          type: string
+        caseId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PointsHistoryResponse:
+      type: object
+      required: [data, totalPoints]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PointsTransaction"
+        totalPoints:
+          type: integer
+
+    # ── ANALYTICS SCHEMAS ─────────────────────────────────────────────────────
+    DashboardKpis:
+      type: object
+      required: [totalCampaigns, activeCampaigns, conversionRate, aiAccuracy, slaCompliance, openCases, criticalCases, queuedCases]
+      properties:
+        totalCampaigns:
+          type: integer
+        activeCampaigns:
+          type: integer
+        conversionRate:
+          type: number
+        aiAccuracy:
+          type: number
+        slaCompliance:
+          type: number
+        openCases:
+          type: integer
+        criticalCases:
+          type: integer
+        queuedCases:
+          type: integer
+        avgConversionLift:
+          type: number
+        totalSubscribers:
+          type: integer
+
+    TrendPoint:
+      type: object
+      required: [date, value]
+      properties:
+        date:
+          type: string
+        value:
+          type: number
+        label:
+          type: ["string", "null"]
+
+    TrendDataResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrendPoint"
+
+    DistributionItem:
+      type: object
+      required: [name, value, count]
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+        count:
+          type: integer
+
+    DistributionDataResponse:
+      type: object
+      required: [bySegment, byType]
+      properties:
+        bySegment:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistributionItem"
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistributionItem"
+
+    ExpertPerformanceEntry:
+      type: object
+      required: [expertId, name, completedCases, avgConversionLift, slaComplianceRate, avgResolutionHours]
+      properties:
+        expertId:
+          type: string
+        name:
+          type: string
+        completedCases:
+          type: integer
+        avgConversionLift:
+          type: number
+        slaComplianceRate:
+          type: number
+        avgResolutionHours:
+          type: number
+        points:
+          type: integer
+
+    ExpertPerformanceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpertPerformanceEntry"
+
+    SlaComplianceResponse:
+      type: object
+      required: [compliance, breached, total, criticalCompliance]
+      properties:
+        compliance:
+          type: number
+        breached:
+          type: integer
+        total:
+          type: integer
+        criticalCompliance:
+          type: number
+
+    ExpertKpis:
+      type: object
+      required: [assignedCases, criticalCases, slaAtRisk, avgConversionLift, completedCases, aiAccuracy]
+      properties:
+        assignedCases:
+          type: integer
+        criticalCases:
+          type: integer
+        slaAtRisk:
+          type: integer
+        avgConversionLift:
+          type: number
+        completedCases:
+          type: integer
+        aiAccuracy:
+          type: number
+        totalPoints:
+          type: integer
+
+    # ── EXPERIMENT SCHEMAS ────────────────────────────────────────────────────
+    Experiment:
+      type: object
+      required: [id, campaignId, name, status, variantA, variantB, createdAt]
+      properties:
+        id:
+          type: string
+        campaignId:
+          type: string
+        caseId:
+          type: ["string", "null"]
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [RUNNING, CONCLUDED, CANCELLED]
+        variantA:
+          $ref: "#/components/schemas/ExperimentVariant"
+        variantB:
+          $ref: "#/components/schemas/ExperimentVariant"
+        winner:
+          type: ["string", "null"]
+        conclusion:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        concludedAt:
+          type: ["string", "null"]
+
+    ExperimentVariant:
+      type: object
+      required: [name, discount, impressions, conversions]
+      properties:
+        name:
+          type: string
+        discount:
+          type: number
+        impressions:
+          type: integer
+        conversions:
+          type: integer
+        conversionRate:
+          type: number
+
+    ExperimentInput:
+      type: object
+      required: [campaignId, name, variantADiscount, variantBDiscount]
+      properties:
+        campaignId:
+          type: string
+        caseId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        variantADiscount:
+          type: number
+        variantBDiscount:
+          type: number
+
+    ExperimentConcludeInput:
+      type: object
+      required: [winner, conclusion]
+      properties:
+        winner:
+          type: string
+          enum: [A, B]
+        conclusion:
+          type: string
+
+    ExperimentListResponse:
+      type: object
+      required: [data, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Experiment"
+        total:
+          type: integer
+
+    # ── AUDIT SCHEMAS ─────────────────────────────────────────────────────────
+    AuditLog:
+      type: object
+      required: [id, userId, userName, action, resource, resourceId, result, ipAddress, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        resourceId:
+          type: ["string", "null"]
+        result:
+          type: string
+          enum: [SUCCESS, FAILURE]
+        ipAddress:
+          type: string
+        details:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    AuditLogListResponse:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer

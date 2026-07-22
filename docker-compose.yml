@@ -1,0 +1,123 @@
+services:
+  # ─── DATABASES ───────────────────────────────────────────────────────────────
+  postgres-identity:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [identity-data:/var/lib/postgresql/data]
+    networks: [campaigncell]
+
+  postgres-campaign:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: campaign_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [campaign-data:/var/lib/postgresql/data]
+    networks: [campaigncell]
+
+  postgres-ai:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ai_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [ai-data:/var/lib/postgresql/data]
+    networks: [campaigncell]
+
+  postgres-gamification:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gamification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [gamification-data:/var/lib/postgresql/data]
+    networks: [campaigncell]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --bind 0.0.0.0 --protected-mode no
+    volumes: [redis-data:/data]
+    networks: [campaigncell]
+
+  # ─── MICROSERVICES ────────────────────────────────────────────────────────────
+  identity-service:
+    build: ./services/identity-service
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres-identity:5432/identity_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${SESSION_SECRET:-campaigncell-dev-secret-2026}
+      SERVICE_TOKEN: campaigncell-internal-2026
+    depends_on:
+      - postgres-identity
+      - redis
+    networks: [campaigncell]
+    restart: on-failure
+
+  campaign-service:
+    build: ./services/campaign-service
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:postgres@postgres-campaign:5432/campaign_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${SESSION_SECRET:-campaigncell-dev-secret-2026}
+      SERVICE_TOKEN: campaigncell-internal-2026
+      AI_SERVICE_URL: http://ai-service:3003
+    depends_on:
+      - postgres-campaign
+      - redis
+      - ai-service
+    networks: [campaigncell]
+    restart: on-failure
+
+  ai-service:
+    build: ./services/ai-service
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://postgres:postgres@postgres-ai:5432/ai_db
+      JWT_SECRET: ${SESSION_SECRET:-campaigncell-dev-secret-2026}
+      SERVICE_TOKEN: campaigncell-internal-2026
+    depends_on:
+      - postgres-ai
+    networks: [campaigncell]
+    restart: on-failure
+
+  gamification-service:
+    build: ./services/gamification-service
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:postgres@postgres-gamification:5432/gamification_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${SESSION_SECRET:-campaigncell-dev-secret-2026}
+      SERVICE_TOKEN: campaigncell-internal-2026
+    depends_on:
+      - postgres-gamification
+      - redis
+    networks: [campaigncell]
+    restart: on-failure
+
+  # ─── API GATEWAY ─────────────────────────────────────────────────────────────
+  gateway:
+    build: ./services/gateway
+    ports: ["3000:80"]
+    depends_on:
+      - identity-service
+      - campaign-service
+      - ai-service
+      - gamification-service
+    networks: [campaigncell]
+    restart: on-failure
+
+volumes:
+  identity-data:
+  campaign-data:
+  ai-data:
+  gamification-data:
+  redis-data:
+
+networks:
+  campaigncell:
+    driver: bridge
