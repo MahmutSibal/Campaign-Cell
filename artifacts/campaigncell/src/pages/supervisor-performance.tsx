@@ -60,7 +60,7 @@ export default function SupervisorPerformance() {
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Avg Conv. Lift</div>
-                    <div className="text-xl font-bold">+{expert.avgConversionLift.toFixed(1)}%</div>
+                    <div className="text-xl font-bold">+{(expert.avgConversionLift ?? 0).toFixed(1)}%</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -69,7 +69,7 @@ export default function SupervisorPerformance() {
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">SLA Compliance</div>
-                    <div className="text-xl font-bold">{(expert.slaComplianceRate * 100).toFixed(1)}%</div>
+                    <div className="text-xl font-bold">{((expert.slaComplianceRate ?? 0) * 100).toFixed(1)}%</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -78,7 +78,7 @@ export default function SupervisorPerformance() {
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Avg Resolution</div>
-                    <div className="text-xl font-bold">{expert.avgResolutionHours.toFixed(1)}h</div>
+                    <div className="text-xl font-bold">{(expert.avgResolutionHours ?? 0).toFixed(1)}h</div>
                   </div>
                 </div>
               </div>

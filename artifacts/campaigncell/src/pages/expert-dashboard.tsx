@@ -20,7 +20,10 @@ import {
 export default function ExpertDashboard() {
   const { user } = useAuth();
   
-  const { data: kpis, isLoading: kpisLoading } = useGetExpertKpis();
+  const { data: kpisResponse, isLoading: kpisLoading } = useGetExpertKpis();
+  // campaign-service nests the payload as `data.{assignedCases,...}`, not
+  // directly on the response root.
+  const kpis = (kpisResponse as unknown as { data?: typeof kpisResponse })?.data;
   const { data: cases, isLoading: casesLoading } = useListCases(
     { assignedTo: user?.id, status: 'ASSIGNED', limit: 5 },
     { query: { queryKey: getListCasesQueryKey({ assignedTo: user?.id, status: 'ASSIGNED', limit: 5 }) } }

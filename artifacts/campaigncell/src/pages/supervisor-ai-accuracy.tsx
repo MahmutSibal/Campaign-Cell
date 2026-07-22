@@ -4,9 +4,12 @@ import { Loader2, Brain, CheckCircle, XCircle, Target } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function SupervisorAIAccuracy() {
-  const { data: accuracy, isLoading } = useGetAiAccuracy({
+  const { data: accuracyResponse, isLoading } = useGetAiAccuracy({
     query: { queryKey: getGetAiAccuracyQueryKey() },
   });
+  // ai-service nests the payload as `data.{overallAccuracy,...,bySegment}`,
+  // not directly on the response root.
+  const accuracy = (accuracyResponse as unknown as { data?: typeof accuracyResponse })?.data;
 
   if (isLoading) {
     return (
@@ -78,7 +81,7 @@ export default function SupervisorAIAccuracy() {
 
       {/* Segment Details */}
       <div className="grid md:grid-cols-2 gap-4">
-        {accuracy?.bySegment.map((seg) => (
+        {(accuracy?.bySegment ?? []).map((seg) => (
           <Card key={seg.segment} className="p-6">
             <h3 className="font-semibold text-lg mb-4">{seg.segment}</h3>
             <div className="space-y-3">

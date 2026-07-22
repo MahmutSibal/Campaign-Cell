@@ -5,9 +5,12 @@ import { Loader2, Brain, CheckCircle, XCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function ExpertAIInsights() {
-  const { data: accuracy, isLoading: accuracyLoading } = useGetAiAccuracy({
+  const { data: accuracyResponse, isLoading: accuracyLoading } = useGetAiAccuracy({
     query: { queryKey: getGetAiAccuracyQueryKey() },
   });
+  // ai-service nests the payload as `data.{overallAccuracy,...,bySegment}`,
+  // not directly on the response root.
+  const accuracy = (accuracyResponse as unknown as { data?: typeof accuracyResponse })?.data;
   
   const { data: predictions, isLoading: predictionsLoading } = useListPredictions(undefined, {
     query: { queryKey: getListPredictionsQueryKey(undefined) },
@@ -105,7 +108,7 @@ export default function ExpertAIInsights() {
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-muted-foreground">Score</div>
-                  <div className="text-lg font-bold">{(pred.recommendationScore * 100).toFixed(1)}%</div>
+                  <div className="text-lg font-bold">{((pred.recommendationScore ?? 0) * 100).toFixed(1)}%</div>
                 </div>
               </div>
             ))}

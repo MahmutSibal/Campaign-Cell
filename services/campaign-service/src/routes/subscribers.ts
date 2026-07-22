@@ -56,11 +56,32 @@ async function findSubscriber(id: string) {
   return byId;
 }
 
+const GSM_PATTERN = /^0\d{10}$/;
+
+// Used only by the subscriber-self-service read routes below. A subscriber
+// who just self-registered via identity-service's GSM+OTP flow exists there
+// but has no campaign-service profile yet (no seeded usage/segment data) —
+// rather than 404 on their very first visit to "My Offers", lazily
+// provision a neutral-default profile so the page loads (with zero offers,
+// since no campaign has scored them yet) instead of erroring.
+async function findOrCreateSubscriber(id: string) {
+  const existing = await findSubscriber(id);
+  if (existing) return existing;
+  if (!GSM_PATTERN.test(id)) return null;
+
+  const [created] = await db
+    .insert(subscribersTable)
+    .values({ name: `Abone ${id.slice(-4)}`, gsmNumber: id })
+    .onConflictDoNothing()
+    .returning();
+  return created ?? (await findSubscriber(id));
+}
+
 // GET /v1/subscribers/:id
 router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const id = String(req.params['id']);
-    const subscriber = await findSubscriber(id);
+    const subscriber = await findOrCreateSubscriber(id);
 
     if (!subscriber) {
       res.status(404).json({ success: false, error: 'Subscriber not found' });
@@ -93,7 +114,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 router.get('/:id/campaigns', requireAuth, async (req: Request, res: Response) => {
   try {
     const id = String(req.params['id']);
-    const subscriber = await findSubscriber(id);
+    const subscriber = await findOrCreateSubscriber(id);
 
     if (!subscriber) {
       res.status(404).json({ success: false, error: 'Subscriber not found' });

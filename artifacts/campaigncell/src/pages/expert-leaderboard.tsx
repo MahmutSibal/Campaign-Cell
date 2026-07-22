@@ -6,20 +6,26 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useGetLeaderboard, getGetLeaderboardQueryKey } from '@workspace/api-client-react';
 import { Loader2, Trophy, Medal } from 'lucide-react';
 
-const levelColors = {
-  BRONZE: 'bg-orange-100 text-orange-700',
-  SILVER: 'bg-gray-100 text-gray-700',
-  GOLD: 'bg-yellow-100 text-yellow-700',
-  PLATINUM: 'bg-purple-100 text-purple-700',
+// gamification-service returns the Turkish level names it actually computes
+// (see services/gamification-service/src/lib/levelCalculator.ts) — the
+// English keys the generated client's type suggests don't occur at runtime.
+const levelColors: Record<string, string> = {
+  BRONZ: 'bg-orange-100 text-orange-700',
+  'GÜMÜŞ': 'bg-gray-100 text-gray-700',
+  ALTIN: 'bg-yellow-100 text-yellow-700',
+  PLATIN: 'bg-purple-100 text-purple-700',
 };
 
 export default function ExpertLeaderboard() {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'all_time'>('daily');
-  
-  const { data: leaderboard, isLoading } = useGetLeaderboard(
+
+  const { data: leaderboardResponse, isLoading } = useGetLeaderboard(
     { period },
     { query: { queryKey: getGetLeaderboardQueryKey({ period }) } }
   );
+  // gamification-service nests the payload as `data.{period,entries}`, not
+  // directly on the response root.
+  const leaderboard = (leaderboardResponse as unknown as { data?: typeof leaderboardResponse })?.data;
 
   return (
     <div className="space-y-6">
@@ -42,8 +48,8 @@ export default function ExpertLeaderboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {leaderboard?.entries.map((entry) => {
-                const initials = entry.name.split(' ').map((n) => n[0]).join('');
+              {(leaderboard?.entries ?? []).map((entry) => {
+                const initials = (entry.name ?? '').split(' ').map((n) => n[0]).join('');
                 const isTopThree = entry.rank <= 3;
 
                 return (
@@ -81,7 +87,7 @@ export default function ExpertLeaderboard() {
                   </Card>
                 );
               })}
-              {leaderboard?.entries.length === 0 && (
+              {(leaderboard?.entries ?? []).length === 0 && (
                 <Card className="p-12 text-center">
                   <p className="text-muted-foreground">No leaderboard data available</p>
                 </Card>

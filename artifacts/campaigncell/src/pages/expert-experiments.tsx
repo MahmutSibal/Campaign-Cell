@@ -52,48 +52,48 @@ export default function ExpertExperiments() {
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-3">Variant A</h4>
+                    <h4 className="font-semibold mb-3">{exp.variantAName || 'Variant A'}</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Discount</span>
-                        <span className="font-medium">{exp.variantA.discount}%</span>
+                        <span className="font-medium">{exp.variantADiscount ?? 0}%</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Impressions</span>
-                        <span className="font-medium">{exp.variantA.impressions}</span>
+                        <span className="font-medium">{exp.variantAImpressions ?? 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Conversions</span>
-                        <span className="font-medium">{exp.variantA.conversions}</span>
+                        <span className="font-medium">{exp.variantAConversions ?? 0}</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t">
                         <span className="text-muted-foreground">Conversion Rate</span>
                         <span className="font-bold text-primary">
-                          {((exp.variantA.conversionRate || 0) * 100).toFixed(2)}%
+                          {(((exp.variantAConversions ?? 0) / (exp.variantAImpressions || 1)) * 100).toFixed(2)}%
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <h4 className="font-semibold mb-3">Variant B</h4>
+                    <h4 className="font-semibold mb-3">{exp.variantBName || 'Variant B'}</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Discount</span>
-                        <span className="font-medium">{exp.variantB.discount}%</span>
+                        <span className="font-medium">{exp.variantBDiscount ?? 0}%</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Impressions</span>
-                        <span className="font-medium">{exp.variantB.impressions}</span>
+                        <span className="font-medium">{exp.variantBImpressions ?? 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Conversions</span>
-                        <span className="font-medium">{exp.variantB.conversions}</span>
+                        <span className="font-medium">{exp.variantBConversions ?? 0}</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t">
                         <span className="text-muted-foreground">Conversion Rate</span>
                         <span className="font-bold text-primary">
-                          {((exp.variantB.conversionRate || 0) * 100).toFixed(2)}%
+                          {(((exp.variantBConversions ?? 0) / (exp.variantBImpressions || 1)) * 100).toFixed(2)}%
                         </span>
                       </div>
                     </div>
