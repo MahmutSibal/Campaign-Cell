@@ -6,7 +6,7 @@ Kullanıcı kimlik doğrulama, yetkilendirme, hesap yönetimi ve denetim kayıtl
 
 ## Sorumlulukar
 - JWT tabanlı kimlik doğrulama (Access Token 15dk, Refresh Token 7 gün)
-- Abone OTP girişi (`POST /v1/auth/request-otp` → `POST /v1/auth/login`)
+- Abone GSM+OTP kaydı ve girişi (`POST /v1/auth/request-otp` → `POST /v1/auth/register` veya `POST /v1/auth/login-otp`; simülasyon: sabit kod `1234`, gerçek SMS gönderilmez)
 - Personel email + bcrypt girişi
 - **5 başarısız giriş → 15 dakika hesap kilidi**
 - Refresh token rotasyonu + hırsızlık tespiti (revoked token yeniden kullanılırsa TÜM oturumlar kapatılır)
@@ -17,8 +17,10 @@ Kullanıcı kimlik doğrulama, yetkilendirme, hesap yönetimi ve denetim kayıtl
 
 | Yöntem | Path | Açıklama | Yetki |
 |--------|------|----------|-------|
-| POST | /v1/auth/request-otp | Abone OTP SMS gönder | Public |
-| POST | /v1/auth/login | Email+şifre veya GSM+OTP girişi | Public |
+| POST | /v1/auth/request-otp | Abone OTP gönder (simülasyon, sabit kod `1234`) | Public |
+| POST | /v1/auth/register | Abone kaydı (ad, soyad, gsmNumber, otp, email?) | Public |
+| POST | /v1/auth/login-otp | Kayıtlı abone için GSM+OTP girişi | Public |
+| POST | /v1/auth/login | Personel email+şifre girişi | Public |
 | POST | /v1/auth/refresh | Token yenile (rotasyon ile) | Public |
 | POST | /v1/auth/logout | Oturumu kapat | Authenticated |
 | GET | /v1/auth/me | Mevcut kullanıcı bilgisi | Authenticated |
