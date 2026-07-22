@@ -35,6 +35,7 @@ router.get('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
     const total = totalResult[0]?.total ?? 0;
 
     res.json({
+      success: true,
       data: {
         logs,
         pagination: {
@@ -47,7 +48,7 @@ router.get('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('List audit logs error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

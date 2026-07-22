@@ -114,6 +114,8 @@ export async function initDb(): Promise<void> {
         subscriber_id VARCHAR(255),
         campaign_id VARCHAR(255),
         status VARCHAR(20) DEFAULT 'PENDING',
+        segment VARCHAR(50),
+        priority VARCHAR(20),
         recommendation_score NUMERIC(5,4),
         conversion_probability NUMERIC(5,4),
         ai_reasoning TEXT,
@@ -121,6 +123,8 @@ export async function initDb(): Promise<void> {
         rejection_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       );
+      ALTER TABLE subscriber_offers ADD COLUMN IF NOT EXISTS segment VARCHAR(50);
+      ALTER TABLE subscriber_offers ADD COLUMN IF NOT EXISTS priority VARCHAR(20);
     `);
     console.log('[campaign-service] Database tables ready');
   } finally {

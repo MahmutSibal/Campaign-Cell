@@ -44,8 +44,10 @@ export async function initDb(): Promise<void> {
         points INTEGER NOT NULL,
         reason VARCHAR(255),
         case_id VARCHAR(255),
+        segment VARCHAR(50),
         created_at TIMESTAMP DEFAULT NOW()
       );
+      ALTER TABLE points_transactions ADD COLUMN IF NOT EXISTS segment VARCHAR(50);
       CREATE TABLE IF NOT EXISTS badges (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) UNIQUE,

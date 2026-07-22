@@ -46,7 +46,7 @@ export async function initDb(): Promise<void> {
     CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name VARCHAR(255) NOT NULL,
-      email VARCHAR(255) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE,
       gsm_number VARCHAR(20) UNIQUE,
       role user_role NOT NULL DEFAULT 'SUBSCRIBER',
       expertise TEXT[] DEFAULT '{}',
@@ -58,6 +58,12 @@ export async function initDb(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW(),
       last_login_at TIMESTAMP
     );
+  `);
+
+  // Migration: older deployments created `email` as NOT NULL. GSM+OTP
+  // self-registered subscribers may not supply an email, so relax it.
+  await db.execute(sql`
+    ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
   `);
 
   // Create refresh_tokens table

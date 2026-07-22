@@ -32,9 +32,9 @@ router.get(
       ]);
 
       const total = Number(countResult[0]?.count ?? 0);
-      res.json({ data, total, page, limit });
+      res.json({ success: true, data, total, page, limit });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch subscribers' });
+      res.status(500).json({ success: false, error: 'Failed to fetch subscribers' });
     }
   },
 );
@@ -56,7 +56,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     const subscriber = await findSubscriber(id);
 
     if (!subscriber) {
-      res.status(404).json({ error: 'Subscriber not found' });
+      res.status(404).json({ success: false, error: 'Subscriber not found' });
       return;
     }
 
@@ -70,6 +70,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       .where(eq(subscriberOffersTable.subscriberId, subscriber.id));
 
     res.json({
+      success: true,
       data: {
         subscriber,
         campaigns: offers.map((o) => ({ ...o.offer, campaign: o.campaign })),
@@ -77,7 +78,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch subscriber' });
+    res.status(500).json({ success: false, error: 'Failed to fetch subscriber' });
   }
 });
 
@@ -88,7 +89,7 @@ router.get('/:id/campaigns', requireAuth, async (req: Request, res: Response) =>
     const subscriber = await findSubscriber(id);
 
     if (!subscriber) {
-      res.status(404).json({ error: 'Subscriber not found' });
+      res.status(404).json({ success: false, error: 'Subscriber not found' });
       return;
     }
 
@@ -101,9 +102,9 @@ router.get('/:id/campaigns', requireAuth, async (req: Request, res: Response) =>
       .leftJoin(campaignsTable, sql`${subscriberOffersTable.campaignId} = ${campaignsTable.id}::text`)
       .where(eq(subscriberOffersTable.subscriberId, subscriber.id));
 
-    res.json({ data: offers.map((o) => ({ ...o.offer, campaign: o.campaign })) });
+    res.json({ success: true, data: offers.map((o) => ({ ...o.offer, campaign: o.campaign })) });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch subscriber campaigns' });
+    res.status(500).json({ success: false, error: 'Failed to fetch subscriber campaigns' });
   }
 });
 
@@ -115,7 +116,7 @@ router.post('/:id/offers/:campaignId/accept', requireAuth, async (req: Request, 
 
     const subscriber = await findSubscriber(id);
     if (!subscriber) {
-      res.status(404).json({ error: 'Subscriber not found' });
+      res.status(404).json({ success: false, error: 'Subscriber not found' });
       return;
     }
 
@@ -131,7 +132,7 @@ router.post('/:id/offers/:campaignId/accept', requireAuth, async (req: Request, 
       );
 
     if (!offer) {
-      res.status(404).json({ error: 'Pending offer not found' });
+      res.status(404).json({ success: false, error: 'Pending offer not found' });
       return;
     }
 
@@ -155,7 +156,7 @@ router.post('/:id/offers/:campaignId/accept', requireAuth, async (req: Request, 
 
     res.json({ success: true, data: updated });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to accept offer' });
+    res.status(500).json({ success: false, error: 'Failed to accept offer' });
   }
 });
 
@@ -167,13 +168,13 @@ router.post('/:id/offers/:campaignId/reject', requireAuth, async (req: Request, 
     const body = req.body as { reason?: string };
 
     if (!body.reason || body.reason.trim().length === 0) {
-      res.status(400).json({ error: 'reason is required' });
+      res.status(400).json({ success: false, error: 'reason is required' });
       return;
     }
 
     const subscriber = await findSubscriber(id);
     if (!subscriber) {
-      res.status(404).json({ error: 'Subscriber not found' });
+      res.status(404).json({ success: false, error: 'Subscriber not found' });
       return;
     }
 
@@ -189,7 +190,7 @@ router.post('/:id/offers/:campaignId/reject', requireAuth, async (req: Request, 
       );
 
     if (!offer) {
-      res.status(404).json({ error: 'Pending offer not found' });
+      res.status(404).json({ success: false, error: 'Pending offer not found' });
       return;
     }
 
@@ -214,7 +215,7 @@ router.post('/:id/offers/:campaignId/reject', requireAuth, async (req: Request, 
 
     res.json({ success: true, data: updated });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to reject offer' });
+    res.status(500).json({ success: false, error: 'Failed to reject offer' });
   }
 });
 
@@ -226,13 +227,13 @@ router.post('/:id/offers/:campaignId/rate', requireAuth, async (req: Request, re
     const body = req.body as { rating?: number };
 
     if (body.rating === undefined || body.rating < 1 || body.rating > 5 || !Number.isInteger(body.rating)) {
-      res.status(400).json({ error: 'rating must be an integer between 1 and 5' });
+      res.status(400).json({ success: false, error: 'rating must be an integer between 1 and 5' });
       return;
     }
 
     const subscriber = await findSubscriber(id);
     if (!subscriber) {
-      res.status(404).json({ error: 'Subscriber not found' });
+      res.status(404).json({ success: false, error: 'Subscriber not found' });
       return;
     }
 
@@ -248,7 +249,7 @@ router.post('/:id/offers/:campaignId/rate', requireAuth, async (req: Request, re
       );
 
     if (!offer) {
-      res.status(404).json({ error: 'Accepted offer not found - can only rate accepted offers' });
+      res.status(404).json({ success: false, error: 'Accepted offer not found - can only rate accepted offers' });
       return;
     }
 
@@ -268,7 +269,7 @@ router.post('/:id/offers/:campaignId/rate', requireAuth, async (req: Request, re
 
     res.json({ success: true, data: updated });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to rate offer' });
+    res.status(500).json({ success: false, error: 'Failed to rate offer' });
   }
 });
 

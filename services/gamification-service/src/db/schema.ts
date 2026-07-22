@@ -19,6 +19,7 @@ export const pointsTransactionsTable = pgTable('points_transactions', {
   points: integer('points').notNull(),
   reason: varchar('reason', { length: 255 }),
   caseId: varchar('case_id', { length: 255 }),
+  segment: varchar('segment', { length: 50 }),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

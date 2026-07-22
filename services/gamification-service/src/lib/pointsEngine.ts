@@ -14,8 +14,8 @@ async function ensureProfile(userId: string, userName?: string): Promise<any> {
   return created;
 }
 
-async function addPoints(userId: string, points: number, reason: string, caseId?: string) {
-  await db.insert(pointsTransactionsTable).values({ userId, points, reason, caseId });
+async function addPoints(userId: string, points: number, reason: string, caseId?: string, segment?: string) {
+  await db.insert(pointsTransactionsTable).values({ userId, points, reason, caseId, segment });
 }
 
 async function updateProfile(userId: string, updates: Partial<{ totalPoints: number; level: string; completedCases: number; fastCompletions: number; conversionTargetHits: number; churnCasesResolved: number }>) {
@@ -32,7 +32,7 @@ export async function handleCampaignOptimized(event: {
 
     // +10 base
     earned += 10;
-    await addPoints(event.expertId, 10, `Vaka tamamlandı: ${event.caseCode || event.caseId}`, event.caseId);
+    await addPoints(event.expertId, 10, `Vaka tamamlandı: ${event.caseCode || event.caseId}`, event.caseId, event.segment);
 
     // +5 hızlı tamamlama (< 2 saat)
     const fast = (event.durationMinutes || 999) < 120;
@@ -69,7 +69,7 @@ export async function handleCampaignOptimized(event: {
     await updateProfile(event.expertId, profileUpdates);
 
     const newProfile = { ...profile, ...profileUpdates };
-    const newBadges = await checkAndAwardBadges(event.expertId, newProfile);
+    const newBadges = await checkAndAwardBadges(event.expertId, newProfile, event.segment);
     if (newBadges.length > 0) {
       logger.info({ expertId: event.expertId, newBadges }, 'Badges earned!');
     }

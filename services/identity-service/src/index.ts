@@ -7,6 +7,7 @@ import { apiLimiter } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import auditRoutes from './routes/audit.js';
+import { startAuditSubscriber } from './lib/auditSubscriber.js';
 
 const logger = pino({
   name: 'identity-service',
@@ -41,7 +42,7 @@ app.use('/v1/audit', auditRoutes);
 
 // 404 handler
 app.use((_req, res) => {
-  res.status(404).json({ error: 'Not found' });
+  res.status(404).json({ success: false, error: 'Not found' });
 });
 
 // Error handler
@@ -53,7 +54,7 @@ app.use(
     _next: express.NextFunction,
   ) => {
     logger.error({ err }, 'Unhandled error');
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   },
 );
 
@@ -62,6 +63,8 @@ async function main() {
     logger.info('Initializing database...');
     await initDb();
     logger.info('Database initialized');
+
+    startAuditSubscriber();
 
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Identity service listening on port ${PORT}`);

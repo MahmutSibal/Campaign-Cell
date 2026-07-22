@@ -103,7 +103,7 @@ export default function ExpertCaseDetail() {
         <div className="flex items-center gap-3">
           <StatusBadge status={case_.status} />
           <PriorityBadge priority={case_.priority} />
-          <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} />
+          <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} priority={case_.priority} />
         </div>
       </div>
 

@@ -24,6 +24,7 @@ import ExpertAchievements from '@/pages/expert-achievements';
 
 import SupervisorDashboard from '@/pages/supervisor-dashboard';
 import SupervisorCases from '@/pages/supervisor-cases';
+import SupervisorQueue from '@/pages/supervisor-queue';
 import SupervisorPerformance from '@/pages/supervisor-performance';
 import SupervisorAIAccuracy from '@/pages/supervisor-ai-accuracy';
 
@@ -115,6 +116,11 @@ function Router() {
       <Route path="/supervisor/cases">
         <DashboardLayout>
           <SupervisorCases />
+        </DashboardLayout>
+      </Route>
+      <Route path="/supervisor/queue">
+        <DashboardLayout>
+          <SupervisorQueue />
         </DashboardLayout>
       </Route>
       <Route path="/supervisor/performance">

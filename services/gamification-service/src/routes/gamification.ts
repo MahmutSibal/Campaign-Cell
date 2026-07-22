@@ -42,7 +42,7 @@ router.get('/profile/:userId', requireAuth, async (req: AuthRequest, res: Respon
 
   const [profile] = await db.select().from(gamificationProfilesTable)
     .where(eq(gamificationProfilesTable.userId, userId)).limit(1);
-  if (!profile) { res.status(404).json({ error: 'Profil bulunamadı' }); return; }
+  if (!profile) { res.status(404).json({ success: false, error: 'Profil bulunamadı' }); return; }
 
   // Badges
   const userBadges = await db.select({ badge: badgesTable, earnedAt: userBadgesTable.earnedAt })

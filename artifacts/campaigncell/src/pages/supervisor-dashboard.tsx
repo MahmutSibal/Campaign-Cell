@@ -193,7 +193,7 @@ export default function SupervisorDashboard() {
                   </div>
                   <p className="text-sm text-muted-foreground">{case_.campaignName}</p>
                 </div>
-                <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} />
+                <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} priority={case_.priority} />
               </div>
             ))
           ) : (

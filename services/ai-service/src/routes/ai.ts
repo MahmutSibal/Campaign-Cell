@@ -11,7 +11,7 @@ const router = Router();
 router.post('/recommend', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { subscriberId, campaignId, subscriberProfile, campaignProfile } = req.body;
   if (!subscriberProfile || !campaignProfile) {
-    res.status(400).json({ error: 'subscriberProfile and campaignProfile required' }); return;
+    res.status(400).json({ success: false, error: 'subscriberProfile and campaignProfile required' }); return;
   }
   const sp: SubscriberProfile = subscriberProfile;
   const cp: CampaignProfile = campaignProfile;
@@ -41,7 +41,7 @@ router.post('/recommend', requireAuth, async (req: AuthRequest, res: Response): 
 // POST /v1/ai/predict (alias)
 router.post('/predict', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { subscriberProfile, campaignProfile, subscriberId, campaignId } = req.body;
-  if (!subscriberProfile || !campaignProfile) { res.status(400).json({ error: 'subscriberProfile and campaignProfile required' }); return; }
+  if (!subscriberProfile || !campaignProfile) { res.status(400).json({ success: false, error: 'subscriberProfile and campaignProfile required' }); return; }
   const score = scoreSubscriberForCampaign(subscriberProfile, campaignProfile);
   const cls = classifySegment(subscriberProfile);
   await db.insert(predictionsTable).values({ campaignId, subscriberId, recommendationScore: String(score.recommendationScore), conversionProbability: String(score.conversionProbability), segment: cls.segment, priority: cls.priority, reasoning: score.reasoning });
@@ -86,7 +86,7 @@ router.get('/accuracy', requireRole('SUPERVISOR', 'ADMIN'), async (req: AuthRequ
 // POST /v1/ai/expert-assignment
 router.post('/expert-assignment', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { caseId, segment, priority } = req.body;
-  if (!segment) { res.status(400).json({ error: 'segment required' }); return; }
+  if (!segment) { res.status(400).json({ success: false, error: 'segment required' }); return; }
 
   const profiles = await db.select().from(expertProfilesTable);
   const experts = profiles.map(p => ({
@@ -114,9 +114,9 @@ router.post('/expert-assignment', requireAuth, async (req: AuthRequest, res: Res
 // PATCH /v1/ai/segment-override
 router.patch('/segment-override', requireRole('CAMPAIGN_EXPERT', 'SUPERVISOR'), async (req: AuthRequest, res: Response): Promise<void> => {
   const { predictionId, newSegment } = req.body;
-  if (!predictionId || !newSegment) { res.status(400).json({ error: 'predictionId and newSegment required' }); return; }
+  if (!predictionId || !newSegment) { res.status(400).json({ success: false, error: 'predictionId and newSegment required' }); return; }
   const [pred] = await db.update(predictionsTable).set({ isAiMisclassified: true, correctedSegment: newSegment, correctedBy: req.user!.id }).where(eq(predictionsTable.id, predictionId)).returning();
-  if (!pred) { res.status(404).json({ error: 'Prediction not found' }); return; }
+  if (!pred) { res.status(404).json({ success: false, error: 'Prediction not found' }); return; }
   res.json({ success: true, data: pred });
 });
 

@@ -19,7 +19,8 @@ export const userRoleEnum = pgEnum('user_role', [
 export const usersTable = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
-  email: varchar('email', { length: 255 }).unique().notNull(),
+  // Nullable: GSM+OTP self-registered SUBSCRIBER accounts may not supply an email.
+  email: varchar('email', { length: 255 }).unique(),
   gsmNumber: varchar('gsm_number', { length: 20 }).unique(),
   role: userRoleEnum('role').notNull().default('SUBSCRIBER'),
   expertise: text('expertise').array().default([]),

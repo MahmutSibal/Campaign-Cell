@@ -14,6 +14,7 @@ import {
   Shield,
   Settings,
   FileText,
+  UserPlus,
 } from 'lucide-react';
 import type { UserProfile } from '@workspace/api-client-react';
 
@@ -100,6 +101,12 @@ const navItems: NavItem[] = [
     label: 'All Cases',
     href: '/supervisor/cases',
     icon: FileCheck,
+    roles: ['SUPERVISOR'],
+  },
+  {
+    label: 'Bekleyen Kuyruk',
+    href: '/supervisor/queue',
+    icon: UserPlus,
     roles: ['SUPERVISOR'],
   },
   {

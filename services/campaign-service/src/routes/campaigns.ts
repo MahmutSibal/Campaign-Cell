@@ -10,8 +10,15 @@ import {
 } from '../db/schema.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { scoreCampaignForSubscriber } from '../lib/aiClient.js';
+import { publishEvent } from '../lib/redis.js';
 
 const router = Router();
+
+function getIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.ip || 'unknown';
+}
 
 const ALLOWED_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
@@ -61,10 +68,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     ]);
 
     const total = Number(countResult[0]?.count ?? 0);
-    res.json({ data, total, page, limit });
+    res.json({ success: true, data, total, page, limit });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch campaigns' });
+    res.status(500).json({ success: false, error: 'Failed to fetch campaigns' });
   }
 });
 
@@ -75,12 +82,12 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
 
     if (!campaign) {
-      res.status(404).json({ error: 'Campaign not found' });
+      res.status(404).json({ success: false, error: 'Campaign not found' });
       return;
     }
-    res.json({ data: campaign });
+    res.json({ success: true, data: campaign });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch campaign' });
+    res.status(500).json({ success: false, error: 'Failed to fetch campaign' });
   }
 });
 
@@ -93,7 +100,7 @@ router.post(
     try {
       const parsed = createCampaignSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+        res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
         return;
       }
       const body = parsed.data;
@@ -122,7 +129,7 @@ router.post(
         .returning();
 
       if (!campaign) {
-        res.status(500).json({ error: 'Failed to create campaign' });
+        res.status(500).json({ success: false, error: 'Failed to create campaign' });
         return;
       }
 
@@ -160,7 +167,7 @@ router.post(
 
           const score = await scoreCampaignForSubscriber(subscriberProfile, campaignProfile);
 
-          if (score.reasoning === 'AI service unavailable - manual review needed') {
+          if (!score.available) {
             aiAvailable = false;
           }
 
@@ -169,6 +176,8 @@ router.post(
               subscriberId: subscriber.id,
               campaignId: campaign.id,
               status: 'PENDING',
+              segment: score.segment,
+              priority: score.priority,
               recommendationScore: String(score.recommendationScore),
               conversionProbability: String(score.conversionProbability),
               aiReasoning: score.reasoning,
@@ -191,7 +200,7 @@ router.post(
           status: 'YENI',
           segment: 'BELIRSIZ',
           priority: 'ORTA',
-          aiReasoning: 'AI service unavailable - manual review needed',
+          aiReasoning: 'AI servisi erişilemiyor - manuel inceleme gerekiyor',
           slaDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
 
@@ -218,7 +227,7 @@ router.post(
       });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Failed to create campaign' });
+      res.status(500).json({ success: false, error: 'Failed to create campaign' });
     }
   },
 );
@@ -233,14 +242,14 @@ router.patch(
       const id = String(req.params['id']);
       const parsed = updateCampaignSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+        res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
         return;
       }
       const body = parsed.data;
 
       const [existing] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
       if (!existing) {
-        res.status(404).json({ error: 'Campaign not found' });
+        res.status(404).json({ success: false, error: 'Campaign not found' });
         return;
       }
 
@@ -261,7 +270,7 @@ router.patch(
 
       res.json({ success: true, data: updated });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to update campaign' });
+      res.status(500).json({ success: false, error: 'Failed to update campaign' });
     }
   },
 );
@@ -276,7 +285,7 @@ router.post(
       const id = String(req.params['id']);
       const [existing] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
       if (!existing) {
-        res.status(404).json({ error: 'Campaign not found' });
+        res.status(404).json({ success: false, error: 'Campaign not found' });
         return;
       }
 
@@ -288,7 +297,7 @@ router.post(
 
       res.json({ success: true, data: updated });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to publish campaign' });
+      res.status(500).json({ success: false, error: 'Failed to publish campaign' });
     }
   },
 );
@@ -303,7 +312,7 @@ router.post(
       const id = String(req.params['id']);
       const [existing] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
       if (!existing) {
-        res.status(404).json({ error: 'Campaign not found' });
+        res.status(404).json({ success: false, error: 'Campaign not found' });
         return;
       }
 
@@ -315,7 +324,7 @@ router.post(
 
       res.json({ success: true, data: updated });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to archive campaign' });
+      res.status(500).json({ success: false, error: 'Failed to archive campaign' });
     }
   },
 );
@@ -330,14 +339,26 @@ router.delete(
       const id = String(req.params['id']);
       const [existing] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
       if (!existing) {
-        res.status(404).json({ error: 'Campaign not found' });
+        res.status(404).json({ success: false, error: 'Campaign not found' });
         return;
       }
 
       await db.delete(campaignsTable).where(eq(campaignsTable.id, id));
+
+      publishEvent('audit.log', {
+        userId: req.user?.id,
+        userName: req.user?.name,
+        action: 'CAMPAIGN_DELETED',
+        resource: 'campaigns',
+        resourceId: id,
+        result: 'SUCCESS',
+        ipAddress: getIp(req),
+        details: `Deleted campaign "${existing.name}" (${existing.campaignCode ?? id})`,
+      });
+
       res.json({ success: true, message: 'Campaign deleted' });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to delete campaign' });
+      res.status(500).json({ success: false, error: 'Failed to delete campaign' });
     }
   },
 );

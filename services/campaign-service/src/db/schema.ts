@@ -93,6 +93,8 @@ export const subscriberOffersTable = pgTable('subscriber_offers', {
   subscriberId: varchar('subscriber_id', { length: 255 }),
   campaignId: varchar('campaign_id', { length: 255 }),
   status: varchar('status', { length: 20 }).default('PENDING'),
+  segment: varchar('segment', { length: 50 }),
+  priority: varchar('priority', { length: 20 }),
   recommendationScore: numeric('recommendation_score', { precision: 5, scale: 4 }),
   conversionProbability: numeric('conversion_probability', { precision: 5, scale: 4 }),
   aiReasoning: text('ai_reasoning'),

@@ -1,5 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { publishEvent } from '../lib/redis.js';
+
+function getIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.ip || 'unknown';
+}
 
 export interface JwtPayload {
   id: string;
@@ -22,7 +29,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    res.status(401).json({ success: false, error: 'Missing or invalid Authorization header' });
     return;
   }
 
@@ -32,18 +39,27 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = payload;
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 }
 
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ success: false, error: 'Authentication required' });
       return;
     }
     if (!roles.includes(req.user.role)) {
-      res.status(403).json({ error: `Access denied. Required roles: ${roles.join(', ')}` });
+      publishEvent('audit.log', {
+        userId: req.user.id,
+        userName: req.user.name,
+        action: 'UNAUTHORIZED_ACCESS',
+        resource: req.originalUrl,
+        result: 'FAILURE',
+        ipAddress: getIp(req),
+        details: `Required roles: ${roles.join(', ')}, current: ${req.user.role}`,
+      });
+      res.status(403).json({ success: false, error: `Access denied. Required roles: ${roles.join(', ')}` });
       return;
     }
     next();

@@ -61,7 +61,7 @@ export default function SupervisorCases() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} />
+                    <SLACountdown deadline={case_.slaDeadline} breached={case_.slaBreached} priority={case_.priority} />
                     {case_.conversionProbability && (
                       <div className="text-right">
                         <div className="text-xs text-muted-foreground">Conv. Prob.</div>

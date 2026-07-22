@@ -8,6 +8,7 @@ import casesRouter from './routes/cases';
 import subscribersRouter from './routes/subscribers';
 import experimentsRouter from './routes/experiments';
 import analyticsRouter from './routes/analytics';
+import { startScheduler } from './lib/scheduler';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
 const app = express();
@@ -26,10 +27,11 @@ app.use('/v1/subscribers', subscribersRouter);
 app.use('/v1/experiments', experimentsRouter);
 app.use('/v1/analytics', analyticsRouter);
 
-app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
+app.use((req, res) => res.status(404).json({ success: false, error: `Route not found: ${req.method} ${req.path}` }));
 
 async function main() {
   await initDb();
+  startScheduler();
   app.listen(PORT, () => logger.info(`[campaign-service] listening on port ${PORT}`));
 }
 main().catch(err => { console.error(err); process.exit(1); });

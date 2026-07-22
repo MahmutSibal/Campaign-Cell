@@ -46,6 +46,7 @@ router.get(
       ]);
 
       res.json({
+        success: true,
         data: {
           totalCampaigns: Number(totalCampaignsResult[0]?.count ?? 0),
           activeCampaigns: Number(activeCampaignsResult[0]?.count ?? 0),
@@ -61,7 +62,7 @@ router.get(
       });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Failed to fetch dashboard analytics' });
+      res.status(500).json({ success: false, error: 'Failed to fetch dashboard analytics' });
     }
   },
 );
@@ -97,9 +98,9 @@ router.get('/conversion-trend', requireAuth, async (req: Request, res: Response)
       });
     }
 
-    res.json({ data });
+    res.json({ success: true, data });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch conversion trend' });
+    res.status(500).json({ success: false, error: 'Failed to fetch conversion trend' });
   }
 });
 
@@ -133,6 +134,7 @@ router.get('/campaign-distribution', requireAuth, async (req: Request, res: Resp
     const totalType = typeRows.reduce((sum, r) => sum + Number(r.count), 0);
 
     res.json({
+      success: true,
       data: {
         bySegment: segmentRows.map((r) => ({
           segment: r.segment,
@@ -148,7 +150,7 @@ router.get('/campaign-distribution', requireAuth, async (req: Request, res: Resp
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch campaign distribution' });
+    res.status(500).json({ success: false, error: 'Failed to fetch campaign distribution' });
   }
 });
 
@@ -205,10 +207,10 @@ router.get(
         };
       });
 
-      res.json({ data: experts });
+      res.json({ success: true, data: experts });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Failed to fetch expert performance' });
+      res.status(500).json({ success: false, error: 'Failed to fetch expert performance' });
     }
   },
 );
@@ -238,10 +240,11 @@ router.get('/sla-compliance', requireAuth, async (req: Request, res: Response) =
       criticalTotal > 0 ? parseFloat((1 - criticalBreached / criticalTotal).toFixed(4)) : 1;
 
     res.json({
+      success: true,
       data: { compliance, breached, total, criticalCompliance, criticalBreached, criticalTotal },
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch SLA compliance' });
+    res.status(500).json({ success: false, error: 'Failed to fetch SLA compliance' });
   }
 });
 
@@ -250,7 +253,7 @@ router.get('/expert-kpis', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ success: false, error: 'Authentication required' });
       return;
     }
 
@@ -282,6 +285,7 @@ router.get('/expert-kpis', requireAuth, async (req: Request, res: Response) => {
     const avgConversionLift = parseFloat((0.10 + hashVal / 10000).toFixed(4));
 
     res.json({
+      success: true,
       data: {
         assignedCases: Number(row?.assignedCases ?? 0),
         criticalCases: Number(row?.criticalCases ?? 0),
@@ -294,7 +298,7 @@ router.get('/expert-kpis', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch expert KPIs' });
+    res.status(500).json({ success: false, error: 'Failed to fetch expert KPIs' });
   }
 });
 

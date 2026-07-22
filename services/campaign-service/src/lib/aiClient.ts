@@ -10,6 +10,7 @@ export interface AiScoreResult {
   segment: string;
   priority: string;
   reasoning: string;
+  available: boolean;
 }
 
 export async function scoreCampaignForSubscriber(
@@ -25,7 +26,8 @@ export async function scoreCampaignForSubscriber(
     });
     if (!res.ok) throw new Error(`AI service responded ${res.status}`);
     const data = await res.json() as any;
-    return data.data || data;
+    const result = data.data || data;
+    return { ...result, available: true };
   } catch (err) {
     logger.warn({ err }, 'AI service unavailable - using fallback');
     return {
@@ -34,6 +36,7 @@ export async function scoreCampaignForSubscriber(
       segment: 'BELIRSIZ',
       priority: 'ORTA',
       reasoning: 'AI servisi erişilemiyor - manuel inceleme gerekiyor',
+      available: false,
     };
   }
 }

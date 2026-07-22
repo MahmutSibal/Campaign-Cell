@@ -19,7 +19,7 @@ app.use(rateLimit({ windowMs: 60 * 1000, max: 300 }));
 app.get('/healthz', (_, res) => res.json({ status: 'ok', service: 'gamification-service', timestamp: new Date().toISOString() }));
 app.use('/v1/game', gamificationRouter);
 app.use('/v1/game', sseRouter);
-app.use((req, res) => res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` }));
+app.use((req, res) => res.status(404).json({ success: false, error: `Route not found: ${req.method} ${req.path}` }));
 
 async function main() {
   await initDb();

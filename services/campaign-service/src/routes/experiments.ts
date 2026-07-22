@@ -35,9 +35,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     ]);
 
     const total = Number(countResult[0]?.count ?? 0);
-    res.json({ data, total, page, limit });
+    res.json({ success: true, data, total, page, limit });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch experiments' });
+    res.status(500).json({ success: false, error: 'Failed to fetch experiments' });
   }
 });
 
@@ -51,13 +51,13 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       .where(eq(experimentsTable.id, id));
 
     if (!experiment) {
-      res.status(404).json({ error: 'Experiment not found' });
+      res.status(404).json({ success: false, error: 'Experiment not found' });
       return;
     }
 
-    res.json({ data: experiment });
+    res.json({ success: true, data: experiment });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch experiment' });
+    res.status(500).json({ success: false, error: 'Failed to fetch experiment' });
   }
 });
 
@@ -70,7 +70,7 @@ router.post(
     try {
       const parsed = createExperimentSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+        res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
         return;
       }
       const body = parsed.data;
@@ -111,7 +111,7 @@ router.post(
       res.status(201).json({ success: true, data: experiment });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Failed to create experiment' });
+      res.status(500).json({ success: false, error: 'Failed to create experiment' });
     }
   },
 );
@@ -126,7 +126,7 @@ router.post(
       const id = String(req.params['id']);
       const parsed = concludeExperimentSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+        res.status(400).json({ success: false, error: 'Validation failed', details: parsed.error.flatten() });
         return;
       }
 
@@ -136,12 +136,12 @@ router.post(
         .where(eq(experimentsTable.id, id));
 
       if (!experiment) {
-        res.status(404).json({ error: 'Experiment not found' });
+        res.status(404).json({ success: false, error: 'Experiment not found' });
         return;
       }
 
       if (experiment.status === 'CONCLUDED') {
-        res.status(400).json({ error: 'Experiment is already concluded' });
+        res.status(400).json({ success: false, error: 'Experiment is already concluded' });
         return;
       }
 
@@ -187,7 +187,7 @@ router.post(
         meta: { variantARate: aRate, variantBRate: bRate, winner },
       });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to conclude experiment' });
+      res.status(500).json({ success: false, error: 'Failed to conclude experiment' });
     }
   },
 );

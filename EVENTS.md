@@ -139,6 +139,55 @@ This event is for future event-sourcing/audit purposes.
 
 ---
 
+### `audit.log`
+
+Published by **Campaign Service**, **AI Service**, and **Gamification Service** whenever a request is
+rejected with 403 (insufficient role), or when a critical action happens (campaign deletion, optimization
+case status change). Consumed by **Identity Service**, which persists the entry into its own `audit_logs`
+table — this is how cross-service actions end up in the centralized audit log without any service reaching
+into another service's database (database-per-service).
+
+```json
+{
+  "event_type": "audit.log",
+  "timestamp": "2026-07-22T10:30:00Z",
+  "payload": {
+    "userId": "uuid",
+    "userName": "Ahmet Yıldız",
+    "action": "UNAUTHORIZED_ACCESS",
+    "resource": "/v1/campaigns",
+    "resourceId": "uuid",
+    "result": "FAILURE",
+    "ipAddress": "10.0.0.5",
+    "details": "Required roles: SUPERVISOR, ADMIN, current: CAMPAIGN_EXPERT"
+  }
+}
+```
+
+**Consumed by:** Identity Service → inserts into `audit_logs` (see `GET /v1/audit`)
+
+---
+
+### `badge.earned`
+
+Published by **Gamification Service** to Redis the moment a badge condition is met after processing
+`campaign.optimized` or `offer.rated`. Relayed to the frontend over `GET /v1/game/events?userId=<id>`
+(Server-Sent Events) so the profile screen can show a toast notification immediately.
+
+```json
+{
+  "userId": "uuid",
+  "badgeId": "hiz-ustasi",
+  "badgeName": "Hız Ustası",
+  "badgeDescription": "2 saatin altında 10 optimizasyon",
+  "earnedAt": "2026-07-22T10:30:00Z"
+}
+```
+
+**Consumed by:** Frontend (`EventSource` on `/v1/game/events?userId=<id>`) → shows a toast notification
+
+---
+
 ## Service Communication Summary
 
 | From | To | Method | When |

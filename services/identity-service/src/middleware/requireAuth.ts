@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../lib/auth.js';
+import { logAudit, getIp } from '../lib/audit.js';
 
 export interface AuthPayload {
   id: string;
@@ -13,7 +14,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'No token provided' });
+    res.status(401).json({ success: false, error: 'No token provided' });
     return;
   }
 
@@ -24,7 +25,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = decoded as unknown as AuthPayload;
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ success: false, error: 'Invalid or expired token' });
   }
 }
 
@@ -33,7 +34,7 @@ export function requireRole(...roles: string[]) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'No token provided' });
+      res.status(401).json({ success: false, error: 'No token provided' });
       return;
     }
 
@@ -44,7 +45,17 @@ export function requireRole(...roles: string[]) {
       req.user = decoded;
 
       if (!roles.includes(decoded.role)) {
+        logAudit({
+          userId: decoded.id,
+          userName: decoded.name,
+          action: 'UNAUTHORIZED_ACCESS',
+          resource: req.originalUrl,
+          result: 'FAILURE',
+          ipAddress: getIp(req),
+          details: `Required roles: ${roles.join(', ')}, current: ${decoded.role}`,
+        });
         res.status(403).json({
+          success: false,
           error: 'Insufficient permissions',
           required: roles,
           current: decoded.role,
@@ -54,7 +65,7 @@ export function requireRole(...roles: string[]) {
 
       next();
     } catch {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      res.status(401).json({ success: false, error: 'Invalid or expired token' });
     }
   };
 }

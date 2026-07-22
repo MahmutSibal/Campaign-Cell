@@ -1,49 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import { eq, desc, count } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { usersTable, auditLogsTable } from '../db/schema.js';
+import { usersTable } from '../db/schema.js';
 import type { NewUser } from '../db/schema.js';
 import { hashPassword, validatePasswordPolicy } from '../lib/auth.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
-import { publishEvent } from '../lib/redis.js';
+import { logAudit, getIp } from '../lib/audit.js';
 
 const router = Router();
-
-function getIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
-  return req.ip || 'unknown';
-}
-
-async function logAudit(params: {
-  userId?: string;
-  userName?: string;
-  action: string;
-  resource?: string;
-  resourceId?: string;
-  result?: string;
-  ipAddress?: string;
-  details?: string;
-}): Promise<void> {
-  try {
-    await db.insert(auditLogsTable).values({
-      userId: params.userId,
-      userName: params.userName,
-      action: params.action,
-      resource: params.resource,
-      resourceId: params.resourceId,
-      result: params.result ?? 'SUCCESS',
-      ipAddress: params.ipAddress,
-      details: params.details,
-    });
-    await publishEvent('audit:events', {
-      ...params,
-      timestamp: new Date().toISOString(),
-    });
-  } catch {
-    // don't fail the request if audit logging fails
-  }
-}
 
 function sanitizeUser(user: typeof usersTable.$inferSelect) {
   const { passwordHash: _ph, ...safe } = user;
@@ -70,6 +34,7 @@ router.get('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
     const total = totalResult[0]?.total ?? 0;
 
     res.json({
+      success: true,
       data: {
         users: users.map(sanitizeUser),
         pagination: {
@@ -82,7 +47,7 @@ router.get('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('List users error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -97,7 +62,17 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     requestingUser.role !== 'SUPERVISOR' &&
     requestingUser.id !== id
   ) {
-    res.status(403).json({ error: 'Access denied' });
+    logAudit({
+      userId: requestingUser.id,
+      userName: requestingUser.name,
+      action: 'UNAUTHORIZED_ACCESS',
+      resource: req.originalUrl,
+      resourceId: id,
+      result: 'FAILURE',
+      ipAddress: getIp(req),
+      details: `Attempted to access another user's record (IDOR) as role ${requestingUser.role}`,
+    });
+    res.status(403).json({ success: false, error: 'Access denied' });
     return;
   }
 
@@ -109,14 +84,14 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       .limit(1);
 
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ success: false, error: 'User not found' });
       return;
     }
 
-    res.json({ data: { user: sanitizeUser(user) } });
+    res.json({ success: true, data: { user: sanitizeUser(user) } });
   } catch (err) {
     console.error('Get user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -142,7 +117,7 @@ router.post('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
   const ip = getIp(req);
 
   if (!name || !email || !role || !password) {
-    res.status(400).json({ error: 'name, email, role, and password are required' });
+    res.status(400).json({ success: false, error: 'name, email, role, and password are required' });
     return;
   }
 
@@ -150,13 +125,14 @@ router.post('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
   if (!validRoles.includes(role)) {
     res
       .status(400)
-      .json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+      .json({ success: false, error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
     return;
   }
 
   const policyResult = validatePasswordPolicy(password);
   if (!policyResult.valid) {
     res.status(400).json({
+      success: false,
       error: 'Password does not meet policy requirements',
       errors: policyResult.errors,
     });
@@ -189,15 +165,15 @@ router.post('/', requireRole('ADMIN'), async (req: Request, res: Response) => {
       details: `Created user ${email} with role ${role}`,
     });
 
-    res.status(201).json({ data: { user: sanitizeUser(newUser) } });
+    res.status(201).json({ success: true, data: { user: sanitizeUser(newUser) } });
   } catch (err: unknown) {
     const pgErr = err as { code?: string };
     if (pgErr.code === '23505') {
-      res.status(409).json({ error: 'A user with that email or GSM number already exists' });
+      res.status(409).json({ success: false, error: 'A user with that email or GSM number already exists' });
       return;
     }
     console.error('Create user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -215,6 +191,7 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response) =
         const validRoles = ['SUBSCRIBER', 'CAMPAIGN_EXPERT', 'SUPERVISOR', 'ADMIN'];
         if (!validRoles.includes(req.body[field] as string)) {
           res.status(400).json({
+            success: false,
             error: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
           });
           return;
@@ -229,6 +206,7 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response) =
     const policyResult = validatePasswordPolicy(req.body.password as string);
     if (!policyResult.valid) {
       res.status(400).json({
+        success: false,
         error: 'Password does not meet policy requirements',
         errors: policyResult.errors,
       });
@@ -238,11 +216,17 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response) =
   }
 
   if (Object.keys(updates).length === 0) {
-    res.status(400).json({ error: 'No valid fields to update' });
+    res.status(400).json({ success: false, error: 'No valid fields to update' });
     return;
   }
 
   try {
+    const [existingUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, id))
+      .limit(1);
+
     const [user] = await db
       .update(usersTable)
       .set(updates as Partial<typeof usersTable.$inferInsert>)
@@ -250,8 +234,21 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response) =
       .returning();
 
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ success: false, error: 'User not found' });
       return;
+    }
+
+    if ('role' in updates && existingUser && existingUser.role !== updates['role']) {
+      await logAudit({
+        userId: req.user!.id,
+        userName: req.user!.name,
+        action: 'ROLE_CHANGED',
+        resource: 'users',
+        resourceId: id,
+        result: 'SUCCESS',
+        ipAddress: ip,
+        details: `${existingUser.role} -> ${updates['role']} for ${user.email}`,
+      });
     }
 
     await logAudit({
@@ -265,15 +262,15 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response) =
       details: `Updated fields: ${Object.keys(updates).join(', ')}`,
     });
 
-    res.json({ data: { user: sanitizeUser(user) } });
+    res.json({ success: true, data: { user: sanitizeUser(user) } });
   } catch (err: unknown) {
     const pgErr = err as { code?: string };
     if (pgErr.code === '23505') {
-      res.status(409).json({ error: 'A user with that email or GSM number already exists' });
+      res.status(409).json({ success: false, error: 'A user with that email or GSM number already exists' });
       return;
     }
     console.error('Update user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -290,7 +287,7 @@ router.post('/:id/lock', requireRole('ADMIN'), async (req: Request, res: Respons
       .returning();
 
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ success: false, error: 'User not found' });
       return;
     }
 
@@ -305,10 +302,10 @@ router.post('/:id/lock', requireRole('ADMIN'), async (req: Request, res: Respons
       details: `Admin locked user ${user.email}`,
     });
 
-    res.json({ data: { user: sanitizeUser(user), message: 'User locked successfully' } });
+    res.json({ success: true, data: { user: sanitizeUser(user), message: 'User locked successfully' } });
   } catch (err) {
     console.error('Lock user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -325,7 +322,7 @@ router.post('/:id/unlock', requireRole('ADMIN'), async (req: Request, res: Respo
       .returning();
 
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ success: false, error: 'User not found' });
       return;
     }
 
@@ -340,10 +337,10 @@ router.post('/:id/unlock', requireRole('ADMIN'), async (req: Request, res: Respo
       details: `Admin unlocked user ${user.email}`,
     });
 
-    res.json({ data: { user: sanitizeUser(user), message: 'User unlocked successfully' } });
+    res.json({ success: true, data: { user: sanitizeUser(user), message: 'User unlocked successfully' } });
   } catch (err) {
     console.error('Unlock user error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

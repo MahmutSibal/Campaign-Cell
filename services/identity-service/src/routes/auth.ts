@@ -1,49 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { usersTable, refreshTokensTable, auditLogsTable } from '../db/schema.js';
+import { usersTable, refreshTokensTable } from '../db/schema.js';
 import { signToken, verifyPassword, generateRefreshToken } from '../lib/auth.js';
-import { publishEvent } from '../lib/redis.js';
+import { logAudit, getIp } from '../lib/audit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
-
-function getIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
-  return req.ip || 'unknown';
-}
-
-async function logAudit(params: {
-  userId?: string;
-  userName?: string;
-  action: string;
-  resource?: string;
-  resourceId?: string;
-  result?: string;
-  ipAddress?: string;
-  details?: string;
-}): Promise<void> {
-  try {
-    await db.insert(auditLogsTable).values({
-      userId: params.userId,
-      userName: params.userName,
-      action: params.action,
-      resource: params.resource,
-      resourceId: params.resourceId,
-      result: params.result ?? 'SUCCESS',
-      ipAddress: params.ipAddress,
-      details: params.details,
-    });
-    await publishEvent('audit:events', {
-      ...params,
-      timestamp: new Date().toISOString(),
-    });
-  } catch {
-    // don't fail the request if audit logging fails
-  }
-}
 
 function buildUserResponse(user: typeof usersTable.$inferSelect) {
   return {
@@ -59,6 +23,35 @@ function buildUserResponse(user: typeof usersTable.$inferSelect) {
   };
 }
 
+// Fixed simulation OTP code — the case spec explicitly calls for a hardcoded
+// "1234" instead of sending a real SMS.
+const SIMULATED_OTP = '1234';
+
+// Normalizes a Turkish GSM number to the canonical `05XXXXXXXXX` (11 digit)
+// form. Accepts `05XXXXXXXXX`, `+905XXXXXXXXX`, `905XXXXXXXXX`, and bare
+// `5XXXXXXXXX`. Returns null if the input isn't a plausible Turkish mobile
+// number.
+function normalizeGsmNumber(raw: string): string | null {
+  const trimmed = raw.replace(/[\s\-()]/g, '');
+
+  let digits: string;
+  if (/^\+90\d{10}$/.test(trimmed)) {
+    digits = `0${trimmed.slice(3)}`;
+  } else if (/^90\d{10}$/.test(trimmed)) {
+    digits = `0${trimmed.slice(2)}`;
+  } else if (/^0\d{10}$/.test(trimmed)) {
+    digits = trimmed;
+  } else if (/^5\d{9}$/.test(trimmed)) {
+    digits = `0${trimmed}`;
+  } else {
+    return null;
+  }
+
+  // Turkish mobile numbers are 11 digits and start with "05".
+  if (!/^05\d{9}$/.test(digits)) return null;
+  return digits;
+}
+
 // POST /v1/auth/login  — email + şifre
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const { email, password } = req.body as { email?: string; password?: string };
@@ -66,7 +59,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 
   try {
     if (!email || !password) {
-      res.status(400).json({ error: 'email ve password gereklidir' });
+      res.status(400).json({ success: false, error: 'email ve password gereklidir' });
       return;
     }
 
@@ -85,7 +78,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         ipAddress: ip,
         details: `Unknown email: ${email}`,
       });
-      res.status(401).json({ error: 'Invalid credentials' });
+      res.status(401).json({ success: false, error: 'Invalid credentials' });
       return;
     }
 
@@ -104,6 +97,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
           details: 'Account locked',
         });
         res.status(401).json({
+          success: false,
           error: 'Account is locked',
           lockedUntil: lockedUntil.toISOString(),
           remainingSeconds,
@@ -118,7 +112,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     }
 
     if (!user.passwordHash) {
-      res.status(401).json({ error: 'Invalid credentials' });
+      res.status(401).json({ success: false, error: 'Invalid credentials' });
       return;
     }
 
@@ -145,6 +139,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         });
 
         res.status(401).json({
+          success: false,
           error: 'Account has been locked due to too many failed login attempts',
           lockedUntil: lockedUntil.toISOString(),
           remainingSeconds: 15 * 60,
@@ -167,7 +162,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         details: `Failed attempt ${newAttempts}/5`,
       });
 
-      res.status(401).json({ error: 'Invalid credentials' });
+      res.status(401).json({ success: false, error: 'Invalid credentials' });
       return;
     }
 
@@ -183,6 +178,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       email: user.email,
       gsmNumber: user.gsmNumber,
       role: user.role,
+      expertise: user.expertise,
+      region: user.region,
     };
 
     const accessToken = signToken(tokenPayload, 15 * 60);
@@ -206,6 +203,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     });
 
     res.json({
+      success: true,
       data: {
         accessToken,
         refreshToken: refreshTokenValue,
@@ -214,7 +212,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -224,7 +222,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   const ip = getIp(req);
 
   if (!refreshToken) {
-    res.status(400).json({ error: 'refreshToken is required' });
+    res.status(400).json({ success: false, error: 'refreshToken is required' });
     return;
   }
 
@@ -236,7 +234,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       .limit(1);
 
     if (!tokenRecord) {
-      res.status(401).json({ error: 'Invalid refresh token' });
+      res.status(401).json({ success: false, error: 'Invalid refresh token' });
       return;
     }
 
@@ -261,13 +259,13 @@ router.post('/refresh', async (req: Request, res: Response) => {
         details: 'Revoked token reuse detected — all tokens revoked',
       });
 
-      res.status(401).json({ error: 'Token has been revoked. Please log in again.' });
+      res.status(401).json({ success: false, error: 'Token has been revoked. Please log in again.' });
       return;
     }
 
     // Token expired
     if (tokenRecord.expiresAt < new Date()) {
-      res.status(401).json({ error: 'Refresh token has expired. Please log in again.' });
+      res.status(401).json({ success: false, error: 'Refresh token has expired. Please log in again.' });
       return;
     }
 
@@ -285,7 +283,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       .limit(1);
 
     if (!user) {
-      res.status(401).json({ error: 'User not found' });
+      res.status(401).json({ success: false, error: 'User not found' });
       return;
     }
 
@@ -295,6 +293,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
       email: user.email,
       gsmNumber: user.gsmNumber,
       role: user.role,
+      expertise: user.expertise,
+      region: user.region,
     };
 
     const accessToken = signToken(tokenPayload, 15 * 60);
@@ -317,6 +317,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     });
 
     res.json({
+      success: true,
       data: {
         accessToken,
         refreshToken: newRefreshTokenValue,
@@ -325,7 +326,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Refresh error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -357,11 +358,17 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
       ipAddress: ip,
     });
 
-    res.json({ data: { success: true } });
+    res.json({ success: true, data: { success: true } });
   } catch (err) {
     console.error('Logout error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
+});
+
+// GET /v1/auth/verify — used by the gateway (nginx auth_request) to validate a
+// bearer token before proxying to sensitive downstream routes.
+router.get('/verify', requireAuth, (req: Request, res: Response) => {
+  res.status(200).json({ success: true, data: { valid: true, userId: req.user!.id, role: req.user!.role } });
 });
 
 // GET /v1/auth/me
@@ -374,14 +381,276 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
       .limit(1);
 
     if (!user) {
-      res.status(401).json({ error: 'User not found' });
+      res.status(401).json({ success: false, error: 'User not found' });
       return;
     }
 
-    res.json({ data: { user: buildUserResponse(user) } });
+    res.json({ success: true, data: { user: buildUserResponse(user) } });
   } catch (err) {
     console.error('Me error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /v1/auth/request-otp — GSM+OTP self-registration/login, step 1.
+// Simulation only: no real SMS is sent, the code is always fixed (1234), and
+// the hint is returned in the response so the demo/frontend can proceed
+// without a real telecom SMS gateway.
+router.post('/request-otp', authLimiter, async (req: Request, res: Response) => {
+  const { gsmNumber } = req.body as { gsmNumber?: string };
+
+  if (!gsmNumber) {
+    res.status(400).json({ success: false, error: 'gsmNumber is required' });
+    return;
+  }
+
+  const normalized = normalizeGsmNumber(gsmNumber);
+  if (!normalized) {
+    res.status(400).json({ success: false, error: 'Invalid GSM number format' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      message: 'OTP sent',
+      otpHint: SIMULATED_OTP,
+    },
+  });
+});
+
+// POST /v1/auth/register — GSM+OTP self-registration for SUBSCRIBER users.
+router.post('/register', authLimiter, async (req: Request, res: Response) => {
+  const { ad, soyad, gsmNumber, otp, email } = req.body as {
+    ad?: string;
+    soyad?: string;
+    gsmNumber?: string;
+    otp?: string;
+    email?: string;
+  };
+  const ip = getIp(req);
+
+  if (!ad || !soyad || !gsmNumber || !otp) {
+    res.status(400).json({ success: false, error: 'ad, soyad, gsmNumber ve otp gereklidir' });
+    return;
+  }
+
+  const normalizedGsm = normalizeGsmNumber(gsmNumber);
+  if (!normalizedGsm) {
+    res.status(400).json({ success: false, error: 'Invalid GSM number format' });
+    return;
+  }
+
+  if (otp !== SIMULATED_OTP) {
+    await logAudit({
+      action: 'SUBSCRIBER_REGISTER_FAILED',
+      resource: 'auth',
+      result: 'FAILURE',
+      ipAddress: ip,
+      details: `Invalid OTP for GSM: ${normalizedGsm}`,
+    });
+    res.status(401).json({ success: false, error: 'Invalid OTP' });
+    return;
+  }
+
+  try {
+    const name = `${ad} ${soyad}`.trim();
+
+    const [newUser] = await db
+      .insert(usersTable)
+      .values({
+        name,
+        email: email || null,
+        gsmNumber: normalizedGsm,
+        role: 'SUBSCRIBER',
+        expertise: [],
+        region: [],
+        passwordHash: null,
+      } as typeof usersTable.$inferInsert)
+      .returning();
+
+    const tokenPayload = {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      gsmNumber: newUser.gsmNumber,
+      role: newUser.role,
+      expertise: newUser.expertise,
+      region: newUser.region,
+    };
+
+    const accessToken = signToken(tokenPayload, 15 * 60);
+    const refreshTokenValue = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db.insert(refreshTokensTable).values({
+      userId: newUser.id,
+      token: refreshTokenValue,
+      expiresAt,
+    });
+
+    await logAudit({
+      userId: newUser.id,
+      userName: newUser.name,
+      action: 'SUBSCRIBER_REGISTERED',
+      resource: 'auth',
+      resourceId: newUser.id,
+      result: 'SUCCESS',
+      ipAddress: ip,
+      details: `GSM+OTP self-registration: ${normalizedGsm}`,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken: refreshTokenValue,
+        user: buildUserResponse(newUser),
+      },
+    });
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string };
+    if (pgErr.code === '23505') {
+      res
+        .status(409)
+        .json({ success: false, error: 'A user with that email or GSM number already exists' });
+      return;
+    }
+    console.error('Register error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /v1/auth/login-otp — GSM+OTP login for already-registered SUBSCRIBER
+// users (simulation: fixed code 1234, same as /request-otp and /register).
+router.post('/login-otp', authLimiter, async (req: Request, res: Response) => {
+  const { gsmNumber, otp } = req.body as { gsmNumber?: string; otp?: string };
+  const ip = getIp(req);
+
+  if (!gsmNumber || !otp) {
+    res.status(400).json({ success: false, error: 'gsmNumber ve otp gereklidir' });
+    return;
+  }
+
+  const normalizedGsm = normalizeGsmNumber(gsmNumber);
+  if (!normalizedGsm) {
+    res.status(400).json({ success: false, error: 'Invalid GSM number format' });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.gsmNumber, normalizedGsm))
+      .limit(1);
+
+    if (!user || user.role !== 'SUBSCRIBER') {
+      // Don't reveal whether the GSM number is registered — enumeration prevention
+      await logAudit({
+        action: 'LOGIN_FAILED',
+        resource: 'auth',
+        result: 'FAILURE',
+        ipAddress: ip,
+        details: `Unknown/ineligible GSM for OTP login: ${normalizedGsm}`,
+      });
+      res.status(401).json({ success: false, error: 'Invalid credentials' });
+      return;
+    }
+
+    // Respect admin-initiated account locks (see /users/:id/lock). Unlike the
+    // password login path, a wrong OTP does NOT increment/trigger a lockout
+    // here: the OTP is a fixed simulated value, not a guessable secret whose
+    // repeated mis-entry indicates a brute-force attack, so there is no
+    // extra signal to act on beyond "did they send 1234 or not".
+    if (user.isLocked) {
+      const lockedUntil = user.lockedUntil;
+      if (lockedUntil && lockedUntil > new Date()) {
+        const remainingSeconds = Math.ceil((lockedUntil.getTime() - Date.now()) / 1000);
+        await logAudit({
+          userId: user.id,
+          userName: user.name,
+          action: 'LOGIN_BLOCKED',
+          resource: 'auth',
+          result: 'FAILURE',
+          ipAddress: ip,
+          details: 'Account locked',
+        });
+        res.status(401).json({
+          success: false,
+          error: 'Account is locked',
+          lockedUntil: lockedUntil.toISOString(),
+          remainingSeconds,
+        });
+        return;
+      }
+      // Lock expired — unlock
+      await db
+        .update(usersTable)
+        .set({ isLocked: false, loginAttempts: 0, lockedUntil: null })
+        .where(eq(usersTable.id, user.id));
+    }
+
+    if (otp !== SIMULATED_OTP) {
+      await logAudit({
+        userId: user.id,
+        userName: user.name,
+        action: 'LOGIN_FAILED',
+        resource: 'auth',
+        result: 'FAILURE',
+        ipAddress: ip,
+        details: 'Invalid OTP',
+      });
+      res.status(401).json({ success: false, error: 'Invalid OTP' });
+      return;
+    }
+
+    await db
+      .update(usersTable)
+      .set({ loginAttempts: 0, lastLoginAt: new Date(), isLocked: false, lockedUntil: null })
+      .where(eq(usersTable.id, user.id));
+
+    const tokenPayload = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      gsmNumber: user.gsmNumber,
+      role: user.role,
+      expertise: user.expertise,
+      region: user.region,
+    };
+
+    const accessToken = signToken(tokenPayload, 15 * 60);
+    const refreshTokenValue = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db.insert(refreshTokensTable).values({
+      userId: user.id,
+      token: refreshTokenValue,
+      expiresAt,
+    });
+
+    await logAudit({
+      userId: user.id,
+      userName: user.name,
+      action: 'LOGIN_SUCCESS',
+      resource: 'auth',
+      result: 'SUCCESS',
+      ipAddress: ip,
+      details: 'GSM/OTP login',
+    });
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken: refreshTokenValue,
+        user: buildUserResponse(user),
+      },
+    });
+  } catch (err) {
+    console.error('Login-otp error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

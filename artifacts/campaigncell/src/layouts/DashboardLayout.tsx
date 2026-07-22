@@ -1,6 +1,7 @@
 import { AppHeader } from '@/components/AppHeader';
 import { Sidebar } from '@/components/Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBadgeNotifications } from '@/hooks/use-badge-notifications';
 import { useLocation } from 'wouter';
 import { useEffect } from 'react';
 
@@ -17,6 +18,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       setLocation('/login');
     }
   }, [user, setLocation]);
+
+  // Badges/points are earned by campaign experts only; gating on role keeps
+  // the stream from opening needlessly for subscribers/supervisors/admins.
+  useBadgeNotifications(user?.role === 'CAMPAIGN_EXPERT' ? user.id : undefined);
 
   if (!user) return null;
 

@@ -25,12 +25,19 @@ async function awardBadge(userId: string, badgeId: string): Promise<void> {
 }
 
 async function todayCompletions(userId: string): Promise<number> {
+  // Calendar-day boundary ("bir günde" = a single calendar day), not a rolling 24h window
   const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTransactionsTable)
-    .where(and(eq(pointsTransactionsTable.userId, userId), sql`created_at >= NOW() - INTERVAL '24 hours'`, sql`points = 10`));
+    .where(and(eq(pointsTransactionsTable.userId, userId), sql`created_at >= date_trunc('day', NOW())`, sql`points = 10`));
   return Number(row?.cnt || 0);
 }
 
-export async function checkAndAwardBadges(userId: string, profile: GameProfile): Promise<string[]> {
+async function segmentCompletions(userId: string, segment: string): Promise<number> {
+  const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTransactionsTable)
+    .where(and(eq(pointsTransactionsTable.userId, userId), eq(pointsTransactionsTable.segment, segment), sql`points = 10`));
+  return Number(row?.cnt || 0);
+}
+
+export async function checkAndAwardBadges(userId: string, profile: GameProfile, currentSegment?: string): Promise<string[]> {
   const earned: string[] = [];
 
   async function check(badgeId: string, condition: boolean | (() => Promise<boolean>)) {
@@ -55,7 +62,7 @@ export async function checkAndAwardBadges(userId: string, profile: GameProfile):
   await check('donusum-krali', profile.conversionTargetHits >= 10);
   await check('maratoncu', async () => (await todayCompletions(userId)) >= 20);
   await check('churn-avcisi', profile.churnCasesResolved >= 10);
-  await check('uzman', profile.completedCases >= 50);
+  await check('uzman', async () => !!currentSegment && (await segmentCompletions(userId, currentSegment)) >= 50);
 
   return earned;
 }

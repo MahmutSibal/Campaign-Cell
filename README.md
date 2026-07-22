@@ -128,8 +128,8 @@ GET    /api/v1/analytics/sla-compliance
 
 ## Swagger / OpenAPI
 
-- Campaign Service: `docs/openapi-campaign.yaml`
-- AI Service: `docs/openapi-ai.yaml`
+Combined spec covering auth, campaigns, cases, subscribers, ai, gamification, analytics, experiments,
+audit and users: `lib/api-spec/openapi.yaml`
 
 ## Mimari Kararlar
 
@@ -167,9 +167,9 @@ Campaign-service → Redis → Gamification-service arası async iletişim. Redi
 ├── artifacts/
 │   ├── campaigncell/           # React frontend (Replit preview)
 │   └── api-server/             # Legacy API (Replit preview)
-├── docs/
-│   ├── openapi-campaign.yaml
-│   └── openapi-ai.yaml
+├── lib/
+│   └── api-spec/
+│       └── openapi.yaml        # Swagger/OpenAPI spec (tüm servisler)
 ├── EVENTS.md                   # Redis event mimarisi
 ├── AI_APPROACH.md              # AI metodoloji belgesi
 └── README.md

@@ -78,10 +78,12 @@ services:
     environment:
       PORT: 3003
       DATABASE_URL: postgresql://postgres:postgres@postgres-ai:5432/ai_db
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${SESSION_SECRET:-campaigncell-dev-secret-2026}
       SERVICE_TOKEN: campaigncell-internal-2026
     depends_on:
       - postgres-ai
+      - redis
     networks: [campaigncell]
     restart: on-failure
 
