@@ -31,7 +31,11 @@ export default function SubscriberPortal() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const subscriberId = user?.id || '';
+  // campaign-service owns subscriber usage/segment data in its own database and
+  // has no foreign key to identity-service's user id; its subscriber records
+  // are looked up by GSM number instead (see findSubscriber in
+  // services/campaign-service/src/routes/subscribers.ts).
+  const subscriberId = user?.gsmNumber || user?.id || '';
 
   const { data: campaigns, isLoading } = useGetSubscriberCampaigns(subscriberId, {
     query: { enabled: !!subscriberId, queryKey: getGetSubscriberCampaignsQueryKey(subscriberId) },

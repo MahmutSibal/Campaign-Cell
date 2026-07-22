@@ -5,22 +5,29 @@ Abone-kampanya eşleştirme puanlaması, segment sınıflandırması ve uzman at
 ## Port: 3003
 
 ## Sorumluluklar
-- **Deterministic scoring**: Ağırlıklı formül ile öneri skoru hesaplama (rastgele veri YOK)
+- **Kendi eğittiğimiz ML modeli**: scikit-learn ile eğitilmiş Logistic Regression modelleri —
+  öneri/dönüşüm skorlaması ve segment sınıflandırması (bkz. `training/` ve kök dizindeki
+  `AI_APPROACH.md`). Model ağırlıkları `src/ml/model_weights.json`'a export edilir ve saf
+  TypeScript ile (`src/ml/mlModel.ts`) çalışma anında Python gerektirmeden inference yapılır.
 - Segment sınıflandırma (YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ)
-- Uzman atama: Uzman×Boşluk×Performans formülü
+- Uzman atama: Uzman×Boşluk×Performans formülü (deterministik, ML değil — case'in verdiği formül)
 - AI doğruluk takibi ve segment düzeltme (expert override)
+- Model ağırlıkları bulunamazsa (`isModelAvailable()` false), eski deterministik ağırlıklı
+  formüle (`src/lib/scorer.ts`) otomatik düşer — servis asla çökmez
 - Tüm tahminler kalıcı olarak saklanır
 
-## Formül (Ağırlıklı Scoring)
+## Model Eğitimi
 
+```bash
+cd training
+pip install -r requirements.txt
+python generate_data.py   # sentetik eğitim verisi üretir (subscribers.csv, subscriber_campaign_interactions.csv)
+python train_model.py     # scikit-learn ile eğitir, ../src/ml/model_weights.json üretir
 ```
-rawScore = segmentMatch(0.30) + churnFactor(0.20) + valueFactor(0.20)
-         + discountAppeal(0.15) + usageFactor(0.15)
 
-recommendationScore = rawScore × historyPenalty × historyBonus
+Detaylı metodoloji, özellik mühendisliği ve doğruluk metrikleri için kök dizindeki `AI_APPROACH.md`.
 
-conversionProbability = recommendationScore × (1 - churnRisk×0.25) × (valueScore×0.40 + 0.60)
-```
+## Formül (Uzman Atama — deterministik, ML değil)
 
 ## Uzman Atama Formülü
 
@@ -36,6 +43,7 @@ uzmanlıkEşleşme × 0.5 + boşlukOranı × 0.3 + performans × 0.2
 | POST | /v1/ai/predict | Öneri skoru (alias) | Auth / Service |
 | GET | /v1/ai/predictions | Tüm tahminleri listele | SUPERVISOR/ADMIN |
 | GET | /v1/ai/accuracy | Model doğruluk raporu (segment bazlı) | SUPERVISOR/ADMIN |
+| GET | /v1/ai/model-info | Eğitilmiş ML modelinin metadata'sı (accuracy, eğitim tarihi, örnek sayısı) | Auth |
 | POST | /v1/ai/expert-assignment | Vakaya en uygun uzmanı bul | Auth / Service |
 | PATCH | /v1/ai/segment-override | AI sınıflandırmasını düzelt | CAMPAIGN_EXPERT/SUPERVISOR |
 | GET | /healthz | Sağlık kontrolü | Public |

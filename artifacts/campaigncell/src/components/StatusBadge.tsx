@@ -27,6 +27,14 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
   ACCEPTED: { label: 'Accepted', variant: 'default', className: 'bg-green-100 text-green-700 hover:bg-green-100' },
   REJECTED: { label: 'Rejected', variant: 'destructive' },
   RATED: { label: 'Rated', variant: 'outline' },
+  // Optimization case state machine (campaign-service uses the Turkish enum)
+  YENI: { label: 'Yeni', variant: 'secondary' },
+  ATANDI: { label: 'Atandı', variant: 'default', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100' },
+  OPTIMIZE_EDILIYOR: { label: 'Optimize Ediliyor', variant: 'default', className: 'bg-purple-100 text-purple-700 hover:bg-purple-100' },
+  TEST_EDILIYOR: { label: 'Test Ediliyor', variant: 'default', className: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-100' },
+  TAMAMLANDI: { label: 'Tamamlandı', variant: 'default', className: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-100' },
+  YAYINDA: { label: 'Yayında', variant: 'default', className: 'bg-green-100 text-green-700 hover:bg-green-100' },
+  ARSIVLENDI: { label: 'Arşivlendi', variant: 'outline' },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

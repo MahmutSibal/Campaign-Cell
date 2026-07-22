@@ -3,20 +3,26 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useListAuditLogs, getListAuditLogsQueryKey } from '@workspace/api-client-react';
+import type { AuditLog } from '@workspace/api-client-react';
 import { Loader2, Search } from 'lucide-react';
 
 export default function AdminAudit() {
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const { data: logs, isLoading } = useListAuditLogs(undefined, {
     query: { queryKey: getListAuditLogsQueryKey(undefined) },
   });
 
-  const filteredLogs = logs?.data.filter(
+  // identity-service nests the array as `data.logs` (with `data.pagination`
+  // alongside it), not `data` directly — and userName/resource can be null
+  // for events with no matched user (e.g. a failed login for an unknown
+  // email), so guard every field before calling string methods on it.
+  const auditLogs = ((logs?.data as unknown as { logs?: AuditLog[] })?.logs) ?? [];
+  const filteredLogs = auditLogs.filter(
     (log) =>
-      log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.resource.toLowerCase().includes(searchQuery.toLowerCase())
+      (log.action ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.userName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.resource ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

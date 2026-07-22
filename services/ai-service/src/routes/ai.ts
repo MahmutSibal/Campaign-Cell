@@ -4,8 +4,65 @@ import { db } from '../db/client';
 import { predictionsTable, expertProfilesTable } from '../db/schema';
 import { AuthRequest, requireAuth, requireRole } from '../middleware/requireAuth';
 import { scoreSubscriberForCampaign, classifySegment, selectBestExpert, SubscriberProfile, CampaignProfile } from '../lib/scorer';
+import { predictSegmentML, predictConversionML, isModelAvailable, getModelMetadata } from '../ml/mlModel';
 
 const router = Router();
+
+function derivePriority(segment: string, churnRisk: number): string {
+  if (segment === 'RISKLI_KAYIP') return churnRisk > 0.85 ? 'KRITIK' : 'YUKSEK';
+  if (segment === 'YUKSEK_DEGER') return 'ORTA';
+  return 'DUSUK';
+}
+
+// Primary scoring path: the scikit-learn models trained in
+// services/ai-service/training/ (see AI_APPROACH.md). Falls back to the
+// deterministic rule-based formula only if the exported weights are
+// missing/unreadable, so the service degrades gracefully rather than
+// crashing — it should never actually trigger since the weights are
+// committed to the repo.
+function scoreWithModel(sp: SubscriberProfile, cp: CampaignProfile) {
+  if (isModelAvailable()) {
+    const segResult = predictSegmentML(sp)!;
+    const conversionProbability = predictConversionML({
+      ...sp,
+      discount: cp.discount,
+      subscriberSegment: sp.segment,
+      campaignSegment: cp.segment,
+      campaignType: cp.type,
+    })!;
+    const priority = derivePriority(segResult.segment, sp.churnRisk);
+    // recommendationScore blends the model's conversion probability with its
+    // own confidence in the subscriber's segment — a confident match on a
+    // likely-to-convert subscriber should rank above a low-confidence one.
+    const recommendationScore = parseFloat(
+      Math.min(1, conversionProbability * 0.75 + segResult.confidence * 0.25).toFixed(4),
+    );
+    const topProbs = Object.entries(segResult.probabilities)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([seg, p]) => `${seg} %${(p * 100).toFixed(0)}`)
+      .join(', ');
+    return {
+      recommendationScore,
+      conversionProbability,
+      segment: segResult.segment,
+      priority,
+      reasoning: `ML model tahmini: ${topProbs} (güven %${(segResult.confidence * 100).toFixed(0)}), dönüşüm olasılığı %${(conversionProbability * 100).toFixed(0)}.`,
+      method: 'ml_model' as const,
+    };
+  }
+
+  const score = scoreSubscriberForCampaign(sp, cp);
+  const classification = classifySegment(sp);
+  return {
+    recommendationScore: score.recommendationScore,
+    conversionProbability: score.conversionProbability,
+    segment: classification.segment,
+    priority: classification.priority,
+    reasoning: score.reasoning,
+    method: 'rule_based' as const,
+  };
+}
 
 // POST /v1/ai/recommend
 router.post('/recommend', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
@@ -15,26 +72,26 @@ router.post('/recommend', requireAuth, async (req: AuthRequest, res: Response): 
   }
   const sp: SubscriberProfile = subscriberProfile;
   const cp: CampaignProfile = campaignProfile;
-  const score = scoreSubscriberForCampaign(sp, cp);
-  const classification = classifySegment(sp);
+  const result = scoreWithModel(sp, cp);
 
   const [pred] = await db.insert(predictionsTable).values({
     campaignId: campaignId || null,
     subscriberId: subscriberId || null,
-    recommendationScore: String(score.recommendationScore),
-    conversionProbability: String(score.conversionProbability),
-    segment: classification.segment,
-    priority: classification.priority,
-    reasoning: score.reasoning,
+    recommendationScore: String(result.recommendationScore),
+    conversionProbability: String(result.conversionProbability),
+    segment: result.segment,
+    priority: result.priority,
+    reasoning: result.reasoning,
   }).returning();
 
   res.json({ success: true, data: {
     predictionId: pred.id,
-    recommendationScore: score.recommendationScore,
-    conversionProbability: score.conversionProbability,
-    segment: classification.segment,
-    priority: classification.priority,
-    reasoning: score.reasoning,
+    recommendationScore: result.recommendationScore,
+    conversionProbability: result.conversionProbability,
+    segment: result.segment,
+    priority: result.priority,
+    reasoning: result.reasoning,
+    method: result.method,
   }});
 });
 
@@ -42,10 +99,15 @@ router.post('/recommend', requireAuth, async (req: AuthRequest, res: Response): 
 router.post('/predict', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   const { subscriberProfile, campaignProfile, subscriberId, campaignId } = req.body;
   if (!subscriberProfile || !campaignProfile) { res.status(400).json({ success: false, error: 'subscriberProfile and campaignProfile required' }); return; }
-  const score = scoreSubscriberForCampaign(subscriberProfile, campaignProfile);
-  const cls = classifySegment(subscriberProfile);
-  await db.insert(predictionsTable).values({ campaignId, subscriberId, recommendationScore: String(score.recommendationScore), conversionProbability: String(score.conversionProbability), segment: cls.segment, priority: cls.priority, reasoning: score.reasoning });
-  res.json({ success: true, data: { ...score, ...cls } });
+  const result = scoreWithModel(subscriberProfile, campaignProfile);
+  await db.insert(predictionsTable).values({ campaignId, subscriberId, recommendationScore: String(result.recommendationScore), conversionProbability: String(result.conversionProbability), segment: result.segment, priority: result.priority, reasoning: result.reasoning });
+  res.json({ success: true, data: result });
+});
+
+// GET /v1/ai/model-info — trained ML model transparency (accuracy, training set size)
+router.get('/model-info', requireAuth, async (_req: AuthRequest, res: Response): Promise<void> => {
+  const metadata = getModelMetadata();
+  res.json({ success: true, data: metadata ?? { available: false, note: 'Model weights not found — using rule-based fallback' } });
 });
 
 // GET /v1/ai/predictions

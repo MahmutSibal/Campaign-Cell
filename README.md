@@ -355,18 +355,26 @@ GET    /api/v1/game/events?userId=<id>    # Server-Sent Events — badge.earned,
 
 ## Yapay Zeka Yaklaşımı
 
-Kural tabanlı, deterministik ağırlıklı skorlama motoru (rastgele/mock çıktı yoktur — her girdi farklı
-sonuç üretir). Detaylı yöntem, formüller ve örnek hesaplamalar için: [`AI_APPROACH.md`](AI_APPROACH.md).
+Kendi eğittiğimiz iki scikit-learn modeli (segment sınıflandırma + dönüşüm tahmini), gerçekçi
+sentetik eğitim verisiyle eğitilmiş ve ağırlıkları saf TypeScript'te inference edilecek şekilde
+export edilmiştir (`services/ai-service/src/ml/`) — Docker imajında Python çalışma zamanı yoktur.
+Model yüklenemezse deterministik ağırlıklı formüle otomatik döner (asla mock/sabit çıktı yok).
+Detaylı metodoloji, eğitim süreci, özellik mühendisliği ve doğruluk metrikleri için:
+[`AI_APPROACH.md`](AI_APPROACH.md).
 
-- **Öneri skoru** (0.0–1.0): Segment uyumu (0.30) + Churn faktörü (0.20) + Değer skoru (0.20) +
-  İndirim çekiciliği (0.15) + Kullanım uyumu (0.15). Skor < 0.60 aboneye gösterilmez, skor > 0.80
-  öncelikli/öne çıkan olarak işaretlenir.
-- **Segment sınıflandırma**: abone davranış verisinden `YUKSEK_DEGER` / `RISKLI_KAYIP` /
-  `YENI_ABONE` / `PASIF` çıkarımı; `RISKLI_KAYIP` otomatik yüksek öncelik alır.
+- **Öneri/dönüşüm skorlama**: İkili Logistic Regression, ~%59 test doğruluğu (temel: %50).
+  Skor < 0.60 aboneye gösterilmez, skor > 0.80 öncelikli/öne çıkan olarak işaretlenir.
+- **Segment sınıflandırma**: Çok sınıflı Logistic Regression, ~%58 test doğruluğu (temel: %20) —
+  `YUKSEK_DEGER` / `RISKLI_KAYIP` / `YENI_ABONE` / `PASIF` / `BELIRSIZ`; `RISKLI_KAYIP` otomatik
+  yüksek öncelik alır.
+- **Eğitim verisi**: `services/ai-service/training/` içinde üretim script'i (`generate_data.py`)
+  ve eğitim script'i (`train_model.py`) repository'de paylaşılmıştır; `pip install -r
+  requirements.txt` sonrası yeniden çalıştırılabilir.
 - **Uzman atama**: `skor = uzmanlık_eşleşme × 0.5 + boşluk_oranı × 0.3 + performans × 0.2`
-  (kapasite: uzman başına 10 aktif vaka; kapasite dolarsa vaka kuyruğa alınır).
+  (case'te verilen formül birebir uygulanır, ML değildir; kapasite: uzman başına 10 aktif vaka).
 - **Doğruluk takibi**: personel/süpervizör AI kategorisini değiştirdiğinde "yanlış sınıflandırma"
-  olarak kaydedilir; `/api/v1/ai/accuracy` genel ve segment bazlı isabet oranını döner.
+  olarak kaydedilir; `/api/v1/ai/accuracy` genel ve segment bazlı isabet oranını, `/api/v1/ai/model-info`
+  eğitilmiş modelin metadata'sını (doğruluk, eğitim tarihi, örnek sayısı) döner.
 
 ## Gamification Kuralları
 

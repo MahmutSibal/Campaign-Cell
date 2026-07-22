@@ -40,11 +40,18 @@ router.get(
 );
 
 async function findSubscriber(id: string) {
-  // Try UUID match first, then userId match
+  // Try UUID match, then userId match, then GSM number match. The GSM fallback
+  // exists because identity-service (the source of truth for a logged-in
+  // subscriber's identity) and campaign-service (which owns usage/segment
+  // data) are separate databases with no foreign key between them —
+  // `subscribers.user_id` is only populated when a subscriber profile is
+  // explicitly linked. Matching on gsm_number, which both services share, lets
+  // an already-provisioned campaign-service subscriber profile resolve
+  // correctly even when that link hasn't been made yet.
   const [byId] = await db
     .select()
     .from(subscribersTable)
-    .where(sql`id::text = ${id} OR user_id = ${id}`)
+    .where(sql`id::text = ${id} OR user_id = ${id} OR gsm_number = ${id}`)
     .limit(1);
   return byId;
 }

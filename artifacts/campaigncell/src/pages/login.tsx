@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useLogin } from '@workspace/api-client-react';
 import { useToast } from '@/hooks/use-toast';
 import type { UserProfile } from '@workspace/api-client-react';
 
@@ -14,17 +13,23 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
-  const loginMutation = useLogin();
 
   // Personel girişi
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [staffLoading, setStaffLoading] = useState(false);
 
   // Abone girişi (GSM + OTP)
   const [gsm, setGsm] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [subscriberLoading, setSubscriberLoading] = useState(false);
+  // İlk kez giriş yapan (henüz kayıtlı olmayan) abone için kayıt alanları
+  const [needsRegistration, setNeedsRegistration] = useState(false);
+  const [ad, setAd] = useState('');
+  const [soyad, setSoyad] = useState('');
+  const [regEmail, setRegEmail] = useState('');
 
   const redirectMap: Record<UserProfile['role'], string> = {
     SUBSCRIBER: '/portal',
@@ -33,27 +38,29 @@ export default function Login() {
     ADMIN: '/admin',
   };
 
-  const handleStaffLogin = () => {
+  const handleStaffLogin = async () => {
     if (!email || !password) {
       toast({ title: 'Hata', description: 'E-posta ve şifre gereklidir', variant: 'destructive' });
       return;
     }
-    loginMutation.mutate(
-      { data: { email, password } },
-      {
-        onSuccess: (data) => {
-          const userData = (data as { accessToken: string; user: UserProfile }).user;
-          const token = (data as { accessToken: string }).accessToken;
-          localStorage.setItem('campaigncell_token', token);
-          login(userData, token);
-          setLocation(redirectMap[userData.role] ?? '/');
-        },
-        onError: (err: any) => {
-          const msg = err?.data?.error || 'E-posta veya şifre hatalı';
-          toast({ title: 'Giriş başarısız', description: msg, variant: 'destructive' });
-        },
+    setStaffLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        applyAuthResult(body.data, redirectMap[(body.data.user as UserProfile).role] ?? '/');
+        return;
       }
-    );
+      toast({ title: 'Giriş başarısız', description: body.error || 'E-posta veya şifre hatalı', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Giriş başarısız', description: 'Sunucuya ulaşılamadı', variant: 'destructive' });
+    } finally {
+      setStaffLoading(false);
+    }
   };
 
   const handleRequestOtp = async () => {
@@ -78,27 +85,66 @@ export default function Login() {
     }
   };
 
-  const handleSubscriberLogin = () => {
+  const applyAuthResult = (result: { accessToken: string; user: UserProfile }, redirectTo = '/portal') => {
+    localStorage.setItem('campaigncell_token', result.accessToken);
+    login(result.user, result.accessToken);
+    setLocation(redirectTo);
+  };
+
+  const handleSubscriberLogin = async () => {
     if (!otp) {
       toast({ title: 'Hata', description: 'OTP gereklidir', variant: 'destructive' });
       return;
     }
-    loginMutation.mutate(
-      { data: { gsmNumber: gsm, otp } as any },
-      {
-        onSuccess: (data) => {
-          const userData = (data as { accessToken: string; user: UserProfile }).user;
-          const token = (data as { accessToken: string }).accessToken;
-          localStorage.setItem('campaigncell_token', token);
-          login(userData, token);
-          setLocation('/portal');
-        },
-        onError: (err: any) => {
-          const msg = err?.data?.error || 'Geçersiz OTP';
-          toast({ title: 'Giriş başarısız', description: msg, variant: 'destructive' });
-        },
+    setSubscriberLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gsmNumber: gsm, otp }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        applyAuthResult(body.data);
+        return;
       }
-    );
+      if (res.status === 401) {
+        // Bu GSM numarası kayıtlı değil — ilk kez giriş, kayıt formuna geç
+        setNeedsRegistration(true);
+        toast({ title: 'Yeni numara', description: 'Devam etmek için ad ve soyadınızı girin' });
+        return;
+      }
+      toast({ title: 'Giriş başarısız', description: body.error || 'Geçersiz OTP', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Giriş başarısız', description: 'Sunucuya ulaşılamadı', variant: 'destructive' });
+    } finally {
+      setSubscriberLoading(false);
+    }
+  };
+
+  const handleSubscriberRegister = async () => {
+    if (!ad || !soyad) {
+      toast({ title: 'Hata', description: 'Ad ve soyad gereklidir', variant: 'destructive' });
+      return;
+    }
+    setSubscriberLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ad, soyad, gsmNumber: gsm, otp, email: regEmail || undefined }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        applyAuthResult(body.data);
+        return;
+      }
+      toast({ title: 'Kayıt başarısız', description: body.error || 'Bir hata oluştu', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Kayıt başarısız', description: 'Sunucuya ulaşılamadı', variant: 'destructive' });
+    } finally {
+      setSubscriberLoading(false);
+    }
   };
 
   return (
@@ -148,9 +194,9 @@ export default function Login() {
               <Button
                 className="w-full"
                 onClick={handleStaffLogin}
-                disabled={!email || !password || loginMutation.isPending}
+                disabled={!email || !password || staffLoading}
               >
-                {loginMutation.isPending ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+                {staffLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
               </Button>
             </TabsContent>
 
@@ -176,7 +222,7 @@ export default function Login() {
                 >
                   {otpLoading ? 'Gönderiliyor...' : 'OTP Gönder'}
                 </Button>
-              ) : (
+              ) : !needsRegistration ? (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="otp">OTP Kodu</Label>
@@ -193,14 +239,50 @@ export default function Login() {
                   <Button
                     className="w-full"
                     onClick={handleSubscriberLogin}
-                    disabled={!otp || loginMutation.isPending}
+                    disabled={!otp || subscriberLoading}
                   >
-                    {loginMutation.isPending ? 'Doğrulanıyor...' : 'Giriş Yap'}
+                    {subscriberLoading ? 'Doğrulanıyor...' : 'Giriş Yap'}
                   </Button>
                   <Button
                     variant="ghost"
                     className="w-full text-sm"
                     onClick={() => { setOtpSent(false); setOtp(''); }}
+                  >
+                    GSM numarasını değiştir
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="ad">Ad</Label>
+                    <Input id="ad" value={ad} onChange={(e) => setAd(e.target.value)} placeholder="Ayşe" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="soyad">Soyad</Label>
+                    <Input id="soyad" value={soyad} onChange={(e) => setSoyad(e.target.value)} placeholder="Yılmaz" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="regEmail">E-posta (opsiyonel)</Label>
+                    <Input
+                      id="regEmail"
+                      type="email"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="ayse@example.com"
+                      onKeyDown={(e) => e.key === 'Enter' && handleSubscriberRegister()}
+                    />
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleSubscriberRegister}
+                    disabled={!ad || !soyad || subscriberLoading}
+                  >
+                    {subscriberLoading ? 'Kaydediliyor...' : 'Kayıt Ol ve Giriş Yap'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full text-sm"
+                    onClick={() => { setOtpSent(false); setOtp(''); setNeedsRegistration(false); }}
                   >
                     GSM numarasını değiştir
                   </Button>
