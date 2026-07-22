@@ -84,6 +84,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/OtpRequestResponse"
 
+  /v1/auth/register:
+    post:
+      operationId: registerSubscriber
+      tags: [auth]
+      summary: Self-register a SUBSCRIBER via GSM + OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /v1/auth/login-otp:
+    post:
+      operationId: loginOtp
+      tags: [auth]
+      summary: Login as an already-registered SUBSCRIBER via GSM + OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
   /v1/auth/refresh:
     post:
       operationId: refreshToken
@@ -1230,6 +1268,24 @@ components:
       properties:
         message:
           type: string
+
+    RegisterInput:
+      type: object
+      required: [ad, soyad, gsmNumber, otp]
+      properties:
+        ad:
+          type: string
+          description: First name
+        soyad:
+          type: string
+          description: Last name
+        gsmNumber:
+          type: string
+        otp:
+          type: string
+        email:
+          type: string
+          description: Optional
 
     RefreshTokenInput:
       type: object
