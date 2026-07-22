@@ -339,6 +339,7 @@ POST   /api/v1/ai/recommend               # öneri skoru + dönüşüm olasılı
 POST   /api/v1/ai/predict                 # recommend ile aynı, alternatif isimlendirme
 GET    /api/v1/ai/predictions             # SÜPERVIZÖR/ADMIN
 GET    /api/v1/ai/accuracy                # genel + segment bazlı doğruluk kırılımı
+GET    /api/v1/ai/model-info              # eğitilmiş ML modelinin metadata'sı (accuracy, eğitim tarihi)
 POST   /api/v1/ai/expert-assignment       # skorlama formülüyle en uygun uzmanı seçer
 PATCH  /api/v1/ai/segment-override        # personel AI kategorisini değiştirdiğinde çağrılır
 ```
