@@ -220,7 +220,7 @@ yazılır — bkz. [Güvenlik](#güvenlik)):
 
 | İşlem | Müşteri | Personel (Uzman) | Süpervizör | Admin |
 |---|:---:|:---:|:---:|:---:|
-| Kampanya oluşturma | ✓ | – | – | – |
+| Kampanya oluşturma | - | ✓ | ✓ | ✓ |
 | Kendi kayıtlarını görme | ✓ | ✓ (atanan) | ✓ (tümü) | ✓ (tümü) |
 | Durum değiştirme | – | ✓ | ✓ | – |
 | Manuel atama | – | – | ✓ | – |
