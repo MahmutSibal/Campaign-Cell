@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const correlationMiddleware = require('./middleware/correlation.middleware');
 const authMiddleware = require('./middleware/auth.middleware');
 const rateLimitMiddleware = require('./middleware/rate-limit.middleware');
+const { authRateLimitMiddleware } = require('./middleware/rate-limit.middleware');
 const healthRoutes = require('./routes/health.routes');
 const proxyRoutes = require('./routes/proxy.routes');
 
@@ -12,6 +13,8 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(correlationMiddleware);
+// Brute-force savunması: giriş/OTP uçlarına SIKI limit (Case §10), diğer her şeye genel limit.
+app.use(['/api/v1/auth/login', '/api/v1/auth/verify-otp', '/api/v1/auth/send-otp'], authRateLimitMiddleware);
 app.use(rateLimitMiddleware);
 
 const eventsRoutes = require('./routes/events.routes');

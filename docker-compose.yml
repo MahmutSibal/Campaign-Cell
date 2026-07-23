@@ -184,6 +184,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@ai-db:5432/ai
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       IDENTITY_SERVICE_URL: http://identity-service:3001
+      JWT_SECRET: campaigncell-secret-key-change-in-prod
     ports:
       - "8000:8000"
     depends_on:

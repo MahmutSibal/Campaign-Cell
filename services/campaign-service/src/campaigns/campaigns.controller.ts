@@ -21,12 +21,18 @@ export class CampaignsController {
     return this.campaignsService.create(dto, user.userId);
   }
 
+  // Kampanya yönetim listesi personel/yönetici içindir. Aboneler tekliflerini
+  // /api/v1/subscribers/:id/offers üzerinden alır (kişiselleştirilmiş) → burada abone 403 alır.
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleEnum.CAMPAIGN_EXPERT, RoleEnum.SUPERVISOR, RoleEnum.ADMIN)
   findAll(@Query() query: QueryCampaignDto) {
     return this.campaignsService.findAll(query);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleEnum.CAMPAIGN_EXPERT, RoleEnum.SUPERVISOR, RoleEnum.ADMIN)
   findOne(@Param('id') id: string) {
     return this.campaignsService.findOne(id);
   }

@@ -13,6 +13,7 @@ from app.schemas import (
 from app.ml.predictor import PredictorEngine
 from app.ml.expert_matcher import find_best_expert_for_case
 from app.events.rabbitmq import RabbitMQManager
+from app.auth import get_current_user, assert_subscriber_owner
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Recommendation & Analytics"])
 
@@ -281,7 +282,9 @@ def get_feature_importances():
     }
 
 @router.get("/subscribers/{subscriber_id}", response_model=SubscriberProfileResponse, summary="Abone AI Profil Detayı")
-def get_subscriber_profile(subscriber_id: str, db: Session = Depends(get_db)):
+def get_subscriber_profile(subscriber_id: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    # IDOR koruması: yalnızca kendi profili (veya süpervizör/admin).
+    assert_subscriber_owner(subscriber_id, user)
     profile = db.query(SubscriberProfile).filter(SubscriberProfile.subscriber_id == subscriber_id).first()
     if not profile:
         # Uydurma kullanım verisi YOK. Profil henüz girilmemişse SIFIR değerlerle oluşturulur
@@ -305,7 +308,9 @@ def get_subscriber_profile(subscriber_id: str, db: Session = Depends(get_db)):
     return profile
 
 @router.put("/subscribers/{subscriber_id}", response_model=SubscriberProfileResponse, summary="Abone Profilini Güncelleme")
-def update_subscriber_profile(subscriber_id: str, dto: SubscriberProfileBase, db: Session = Depends(get_db)):
+def update_subscriber_profile(subscriber_id: str, dto: SubscriberProfileBase, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    # IDOR koruması: yalnızca kendi profilini güncelleyebilir (veya süpervizör/admin).
+    assert_subscriber_owner(subscriber_id, user)
     profile = db.query(SubscriberProfile).filter(SubscriberProfile.subscriber_id == subscriber_id).first()
     if not profile:
         profile = SubscriberProfile(subscriber_id=subscriber_id)

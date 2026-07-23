@@ -15,12 +15,17 @@ import { RoleEnum } from '../auth/roles.enum.js';
 export class CasesController {
   constructor(private readonly casesService: CasesService) {}
 
+  // Optimizasyon vakaları iç operasyon verisidir → yalnızca personel/yönetici erişebilir (abone 403).
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleEnum.CAMPAIGN_EXPERT, RoleEnum.SUPERVISOR, RoleEnum.ADMIN)
   findAll(@Query() query: QueryCaseDto) {
     return this.casesService.findAll(query);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleEnum.CAMPAIGN_EXPERT, RoleEnum.SUPERVISOR, RoleEnum.ADMIN)
   findOne(@Param('id') id: string) {
     return this.casesService.findOne(id);
   }
