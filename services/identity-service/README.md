@@ -1,65 +1,38 @@
-# Identity Service
+# CampaignCell — Identity Service
 
-Kullanıcı kimlik doğrulama, yetkilendirme, hesap yönetimi ve denetim kayıtları servisi.
+Identity Service, Turkcell CampaignCell platformunun kimlik doğrulama, yetkilendirme (RBAC), token yönetimi, kullanıcı yönetimi ve güvenlik denetim (audit logging) mikroservisidir.
 
-## Port: 3001
+## 🚀 Sorumluluklar
 
-## Sorumlulukar
-- JWT tabanlı kimlik doğrulama (Access Token 15dk, Refresh Token 7 gün)
-- Abone GSM+OTP kaydı ve girişi (`POST /v1/auth/request-otp` → `POST /v1/auth/register` veya `POST /v1/auth/login-otp`; simülasyon: sabit kod `1234`, gerçek SMS gönderilmez)
-- Personel email + bcrypt girişi
-- **5 başarısız giriş → 15 dakika hesap kilidi**
-- Refresh token rotasyonu + hırsızlık tespiti (revoked token yeniden kullanılırsa TÜM oturumlar kapatılır)
-- Şifre politikası: 8+ karakter, büyük harf, rakam, özel karakter
-- Audit log (tüm güvenlik olayları kaydedilir)
+- **GSM + OTP Girişi**: Müşteriler için dinamik ve simüle (1234) OTP SMS doğrulama.
+- **E-Posta + Şifre Girişi**: Personel (Uzman, Süpervizör, Admin) hesapları için güvenli şifre doğrulama.
+- **Şifre Politikası**: Minimum 8 karakter, 1 büyük harf, 1 rakam, 1 özel karakter kontrolü.
+- **Hesap Kilitleme**: 5 başarısız giriş denemesinde hesabı 15 dakika kilitler.
+- **JWT & Token Rotation**: 15 dakika geçerli Access Token + 7 gün geçerli Refresh Token. Refresh token kullanıldığında yeni token üretilir, eski token geçersiz kılınır (Token theft koruması).
+- **Rol Tabanlı Yetkilendirme (RBAC)**: `SUBSCRIBER`, `CAMPAIGN_EXPERT`, `SUPERVISOR`, `ADMIN` rolleri.
+- **Audit Logging**: Kritik yazma işlemlerini, şifre denemelerini ve yetkisiz erişimleri (403) veritabanına kaydeder.
 
-## Endpointler
+## 📡 API Endpointleri
 
-| Yöntem | Path | Açıklama | Yetki |
-|--------|------|----------|-------|
-| POST | /v1/auth/request-otp | Abone OTP gönder (simülasyon, sabit kod `1234`) | Public |
-| POST | /v1/auth/register | Abone kaydı (ad, soyad, gsmNumber, otp, email?) | Public |
-| POST | /v1/auth/login-otp | Kayıtlı abone için GSM+OTP girişi | Public |
-| POST | /v1/auth/login | Personel email+şifre girişi | Public |
-| POST | /v1/auth/refresh | Token yenile (rotasyon ile) | Public |
-| POST | /v1/auth/logout | Oturumu kapat | Authenticated |
-| GET | /v1/auth/me | Mevcut kullanıcı bilgisi | Authenticated |
-| GET | /v1/users | Tüm kullanıcıları listele | SUPERVISOR/ADMIN |
-| GET | /v1/users/:id | Kullanıcı detayı (IDOR korumalı) | Authenticated |
-| POST | /v1/users | Yeni kullanıcı oluştur | ADMIN |
-| PATCH | /v1/users/:id | Kullanıcı güncelle | ADMIN |
-| POST | /v1/users/:id/lock | Hesabı kilitle | ADMIN |
-| POST | /v1/users/:id/unlock | Hesap kilidini aç | ADMIN |
-| GET | /v1/audit | Denetim kayıtları | ADMIN |
-| GET | /healthz | Sağlık kontrolü | Public |
+| Metot | Endpoint | Yetki | Açıklama |
+|---|---|---|---|
+| `POST` | `/auth/send-otp` | Public | Abone GSM numarasına OTP gönderir |
+| `POST` | `/auth/verify-otp` | Public | OTP kodunu doğrular, JWT Access/Refresh Token döner |
+| `POST` | `/auth/login` | Public | Personel e-posta + şifre ile giriş yapar |
+| `POST` | `/auth/register` | Public | Yeni abone hesabı açar |
+| `GET` | `/auth/profile` | Auth | Giriş yapmış kullanıcının profilini getirir |
+| `GET` | `/admin/users` | ADMIN | Tüm kullanıcı hesaplarını listeler |
+| `POST` | `/admin/users` | ADMIN | Yeni personel hesabı (Uzman/Süpervizör/Admin) oluşturur |
+| `PATCH` | `/admin/users/:id/role` | ADMIN | Kullanıcı rolünü günceller |
+| `PATCH` | `/admin/users/:id/unlock` | ADMIN | Kilitli kullanıcının kilidini kaldırır |
+| `GET` | `/admin/audit-logs` | ADMIN, SUPERVISOR | Güvenlik ve denetim loglarını getirir |
 
-## Demo Kimlik Bilgileri
+## ⚙️ Environment Değişkenleri
 
-| Kullanıcı | Email | Şifre | Rol |
-|-----------|-------|-------|-----|
-| Admin | admin@turkcell.com.tr | Demo1234! | ADMIN |
-| Supervisor | burak.supervisor@turkcell.com.tr | Demo1234! | SUPERVISOR |
-| Expert | ahmet.expert@turkcell.com.tr | Demo1234! | CAMPAIGN_EXPERT |
-| Subscriber | — | GSM: 05350000000, OTP: 1234 | SUBSCRIBER |
-
-## Güvenlik Özellikleri
-- Account lockout: 5 hatalı giriş → 15dk kilit
-- Token theft detection: revoked token kullanımında tüm oturumlar sonlanır
-- IDOR koruması: aboneler sadece kendi profillerini görebilir
-- Rate limiting: auth 10r/15dk, API 200r/dk
-
-## Ortam Değişkenleri
-
-```
+```env
 PORT=3001
-DATABASE_URL=postgresql://postgres:postgres@postgres-identity:5432/identity_db
-REDIS_URL=redis://redis:6379
-JWT_SECRET=change-me-in-production
-SERVICE_TOKEN=campaigncell-internal-2026
-```
-
-## Seed
-
-```bash
-npm run seed
+DATABASE_URL=postgresql://campaigncell_user:campaigncell_secret_2026@identity-db:5432/identity_db?schema=public
+JWT_SECRET=super_secret_jwt_key_turkcell_2026
+JWT_EXPIRES_IN=15m
+REFRESH_TOKEN_EXPIRES_IN=7d
 ```

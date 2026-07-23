@@ -1,89 +1,69 @@
-# AI Service
+# CampaignCell — AI Service
 
-Abone-kampanya eşleştirme puanlaması, segment sınıflandırması ve uzman atama servisi.
+AI Service, Turkcell abonelerinin kullanım alışkanlıklarını analiz ederek kişiselleştirilmiş kampanya önerisi skorlayan, dönüşüm olasılığı tahmini üreten, segment sınıflandırması yapan ve akıllı uzman ataması gerçekleştiren Python / FastAPI tabanlı makine öğrenmesi mikroservisidir.
 
-## Port: 3003
+## 🚀 Sorumluluklar & Görevler
 
-## Sorumluluklar
-- **Kendi eğittiğimiz ML modeli**: scikit-learn ile eğitilmiş Logistic Regression modelleri —
-  öneri/dönüşüm skorlaması ve segment sınıflandırması (bkz. `training/` ve kök dizindeki
-  `AI_APPROACH.md`). Model ağırlıkları `src/ml/model_weights.json`'a export edilir ve saf
-  TypeScript ile (`src/ml/mlModel.ts`) çalışma anında Python gerektirmeden inference yapılır.
-- Segment sınıflandırma (YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, BELIRSIZ)
-- Uzman atama: Uzman×Boşluk×Performans formülü (deterministik, ML değil — case'in verdiği formül)
-- AI doğruluk takibi ve segment düzeltme (expert override)
-- Model ağırlıkları bulunamazsa (`isModelAvailable()` false), eski deterministik ağırlıklı
-  formüle (`src/lib/scorer.ts`) otomatik düşer — servis asla çökmez
-- Tüm tahminler kalıcı olarak saklanır
+1. **Öneri Skorlama & Dönüşüm Tahmini**:
+   - `scikit-learn` tabanlı `RandomForestClassifier` ve `GradientBoostingClassifier` modelleri.
+   - Abone veri kullanımı (GB), konuşma dakikası, aylık harcama (ARPU), abonelik süresi (tenure), şikayet geçmişi ve kullanım trendini girdi olarak alır.
+   - Çıktı: Öneri skoru (0.0-1.0) ve dönüşüm olasılığı (0.0-1.0).
+2. **Segment Sınıflandırma**:
+   - Abone davranışını `YUKSEK_DEGER`, `RISKLI_KAYIP`, `YENI_ABONE`, `PASIF` segmentlerine ayırır.
+   - `RISKLI_KAYIP` (churn riski) segmenti otomatik `KRITIK` / `YUKSEK` öncelik alır.
+3. **Akıllı Uzman Ataması**:
+   - Algoritma: `skor = (uzmanlik_eslesme × 0.5) + (müsaitlik × 0.3) + (performans × 0.2)`
+   - Vaka segmentine en uygun uzmanın atanmasını önerir.
+4. **XAI (Açıklanabilir Yapay Zeka)**:
+   - Tahmin kararlarının arkasındaki nedenleri anlaşılır Türkçe metin olarak üretir ("Aylık 38.5 GB yüksek veri kullanımı ve 2 aktif şikayet nedeniyle RISKLI_KAYIP olarak değerlendirilmiştir").
+5. **Doğruluk Takibi & Canlı Model Eğitimi**:
+   - Yanlış sınıflandırmaları (`PredictionCorrection`) takip eder. Kategori bazlı doğruluk kırılımı sunar.
+   - `POST /api/v1/ai/train` endpoint'i ile istenilen örneklem sayısı ve model türüyle canlı yeniden eğitim yapılabilir.
 
-## Model Eğitimi
+## 📡 API Endpointleri
+
+| Metot | Endpoint | Açıklama |
+|---|---|---|
+| `GET` | `/api/v1/ai/health` | Servis ve veritabanı durum kontrolü |
+| `POST` | `/api/v1/ai/recommend` | Kampanya öneri skoru, dönüşüm olasılığı ve XAI gerekçesi üretir |
+| `POST` | `/api/v1/ai/train` | Modeli yeni sentetik/gerçek veriyle yeniden eğitir ve versiyonlar |
+| `GET` | `/api/v1/ai/accuracy` | Canlı model doğruluk oranını ve kategori kırılımını getirir |
+| `GET` | `/api/v1/ai/subscribers/:id` | Abonenin AI profil detaylarını getirir |
+| `PUT` | `/api/v1/ai/subscribers/:id` | Abonenin AI profilini günceller |
+
+## ⚙️ Environment Değişkenleri
+
+```env
+PORT=8000
+DATABASE_URL=postgresql://postgres:postgres@ai-db:5432/ai
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+IDENTITY_SERVICE_URL=http://identity-service:3001
+```
+
+> `IDENTITY_SERVICE_URL`, akıllı uzman ataması için Identity Service'in `/internal/experts`
+> uç noktasından gerçek uzman listesini (isim, uzmanlık etiketleri, bölge) çekmek üzere kullanılır.
+> Identity erişilemezse yedek uzman roster'ına düşülür (servis bağımsızlığı).
+
+## 📊 Eğitim Verisi ve Model Eğitim Süreci
+
+Eğitim verisi repoda paylaşılmıştır: [`data/training_dataset.csv`](./data/training_dataset.csv)
+(1.200 satır, her satır Türkçe abone profili açıklaması içerir).
+
+**Veri üretimi (yeniden oluşturma):**
 
 ```bash
-cd training
-pip install -r requirements.txt
-python generate_data.py   # sentetik eğitim verisi üretir (subscribers.csv, subscriber_campaign_interactions.csv)
-python train_model.py     # scikit-learn ile eğitir, ../src/ml/model_weights.json üretir
+python -m app.ml.dataset_generator
+# → services/ai-service/data/training_dataset.csv
 ```
 
-Detaylı metodoloji, özellik mühendisliği ve doğruluk metrikleri için kök dizindeki `AI_APPROACH.md`.
+**Özellikler (features):** `monthly_data_usage_gb`, `monthly_voice_min`, `monthly_spend_try`,
+`tenure_months`, `past_accepted_count`, `past_rejected_count`, `complaint_count`,
+`data_usage_trend_pct`. **Hedefler:** `target_segment`, `target_priority`, `is_converted`.
 
-## Formül (Uzman Atama — deterministik, ML değil)
-
-## Uzman Atama Formülü
-
-```
-uzmanlıkEşleşme × 0.5 + boşlukOranı × 0.3 + performans × 0.2
-```
-
-## Endpointler
-
-| Yöntem | Path | Açıklama | Yetki |
-|--------|------|----------|-------|
-| POST | /v1/ai/recommend | Kampanya öneri skoru hesapla | Auth / Service |
-| POST | /v1/ai/predict | Öneri skoru (alias) | Auth / Service |
-| GET | /v1/ai/predictions | Tüm tahminleri listele | SUPERVISOR/ADMIN |
-| GET | /v1/ai/accuracy | Model doğruluk raporu (segment bazlı) | SUPERVISOR/ADMIN |
-| GET | /v1/ai/model-info | Eğitilmiş ML modelinin metadata'sı (accuracy, eğitim tarihi, örnek sayısı) | Auth |
-| POST | /v1/ai/expert-assignment | Vakaya en uygun uzmanı bul | Auth / Service |
-| PATCH | /v1/ai/segment-override | AI sınıflandırmasını düzelt | CAMPAIGN_EXPERT/SUPERVISOR |
-| GET | /healthz | Sağlık kontrolü | Public |
-
-## Service-to-Service Erişimi
-
-Campaign-service bu servisi `X-Service-Token` header'ı ile çağırır:
-```http
-X-Service-Token: campaigncell-internal-2026
-```
-
-## Örnek İstek
-
-```json
-POST /v1/ai/recommend
-{
-  "subscriberProfile": {
-    "monthlySpend": 350,
-    "dataUsageGb": 65,
-    "voiceMinutes": 1200,
-    "churnRisk": 0.72,
-    "valueScore": 0.85,
-    "acceptedCampaigns": 3,
-    "rejectedCampaigns": 1,
-    "segment": "RISKLI_KAYIP",
-    "tariff": "Süper 30GB"
-  },
-  "campaignProfile": {
-    "type": "SADAKAT",
-    "discount": 25,
-    "segment": "RISKLI_KAYIP"
-  }
-}
-```
-
-## Ortam Değişkenleri
-
-```
-PORT=3003
-DATABASE_URL=postgresql://postgres:postgres@postgres-ai:5432/ai_db
-JWT_SECRET=change-me-in-production
-SERVICE_TOKEN=campaigncell-internal-2026
-```
+**Eğitim akışı:**
+1. `dataset_generator.py` gerçekçi telko dağılımlarıyla sentetik veri üretir (deterministik `seed=42`).
+2. `predictor.py` içindeki `PredictorEngine`, veriyi `StandardScaler` ile ölçekler ve
+   `RandomForest` / `GradientBoosting` modellerini 5-fold cross-validation ile eğitir.
+3. En iyi model aktif üretim modeli olarak versiyonlanır (`ModelVersion`).
+4. `POST /api/v1/ai/train` ile çalışma zamanında yeniden eğitim tetiklenebilir;
+   `GET /api/v1/ai/benchmark` model karşılaştırmasını, `GET /api/v1/ai/accuracy` canlı doğruluğu döner.

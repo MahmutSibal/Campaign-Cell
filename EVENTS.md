@@ -1,214 +1,129 @@
-# CampaignCell — Event Architecture
+# CampaignCell — Olay Tabanlı Mimari Dokümanı (EVENTS.md)
 
-All events are transmitted via **Redis Pub/Sub**. Campaign Service publishes events;
-Gamification Service subscribes. This ensures service independence — if Gamification
-Service is down, events are missed (no persistence), which is acceptable for a demo.
+CampaignCell mikroservis ekosistemi, servisler arası gevşek bağlılığı (loose coupling) ve yüksek ölçeklenebilirliği sağlamak amacıyla asenkron event-driven mimari (RabbitMQ) kullanır.
+
+## 📡 Event Exchange ve Queue Mimarisi
+
+- **Exchange Name**: `campaign_events` (Topic Exchange)
+- **Queues**:
+  - `q.campaign.ai-events`: Campaign Service dinler
+  - `q.ai.campaign-events`: AI Service dinler
+  - `q.gamification.campaign-events`: Gamification Service dinler
 
 ---
 
-## Event Channels
+## 📋 Tanımlı Event Listesi & Payload Yapıları
 
-### `campaign.optimized`
+### 1. `campaign.created`
+- **Yayınlayan**: Campaign Service
+- **Dinleyen**: AI Service
+- **Açıklama**: Yeni bir kampanya oluşturulduğunda tetiklenir. AI servisi aboneye özel öneri skorlamasını başlatır.
 
-Published by **Campaign Service** when an expert marks a case as TAMAMLANDI.
+```json
+{
+  "event_type": "campaign.created",
+  "timestamp": "2026-07-22T20:00:00Z",
+  "payload": {
+    "campaign_id": "c1a23456-0000-0000-0000-000000000001",
+    "campaign_code": "CMP-2026-000101",
+    "name": "Yüksek Değerli Abone 20GB Ek Paket",
+    "type": "EK_PAKET",
+    "target_segment": "YUKSEK_DEGER",
+    "discount_percent": 30
+  }
+}
+```
+
+---
+
+### 2. `ai.prediction.created`
+- **Yayınlayan**: AI Service
+- **Dinleyen**: Campaign Service
+- **Açıklama**: AI servisi bir vaka için tahmin ürettiğinde fırlatır.
+
+```json
+{
+  "event_type": "ai.prediction.created",
+  "timestamp": "2026-07-22T20:00:01Z",
+  "payload": {
+    "prediction_id": "p9876543-0000-0000-0000-000000000001",
+    "subscriber_id": "sub-1001",
+    "campaign_id": "c1a23456-0000-0000-0000-000000000001",
+    "recommendation_score": 0.885,
+    "conversion_probability": 0.820,
+    "predicted_segment": "YUKSEK_DEGER",
+    "predicted_priority": "YUKSEK",
+    "recommended_expert_id": "a7f30000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+### 3. `segment.changed` (AI Feedback Loop)
+- **Yayınlayan**: Campaign Service
+- **Dinleyen**: AI Service
+- **Açıklama**: Uzman veya Süpervizör AI'ın atadığı segmenti override ettiğinde tetiklenir. AI servisi bunu 'yanlış sınıflandırma' olarak kaydeder.
+
+```json
+{
+  "event_type": "segment.changed",
+  "timestamp": "2026-07-22T20:05:00Z",
+  "payload": {
+    "case_id": "case-001",
+    "original_segment": "YENI_ABONE",
+    "corrected_segment": "RISKLI_KAYIP",
+    "corrected_by": "supervisor@turkcell.com.tr"
+  }
+}
+```
+
+---
+
+### 4. `campaign.optimized`
+- **Yayınlayan**: Campaign Service
+- **Dinleyen**: Gamification Service
+- **Açıklama**: Uzman optimizasyon vakasını `TAMAMLANDI` durumuna getirdiğinde fırlatılır. Puan ve rozet motoru tetiklenir.
 
 ```json
 {
   "event_type": "campaign.optimized",
-  "timestamp": "2026-07-22T10:30:00Z",
+  "timestamp": "2026-07-22T20:10:00Z",
   "payload": {
-    "caseId": "uuid",
-    "caseCode": "CMP-2026-000042",
-    "expertId": "uuid",
-    "expertName": "Ahmet Yıldız",
-    "segment": "RISKLI_KAYIP",
-    "priority": "YUKSEK",
-    "conversionLift": 0.18,
-    "durationMinutes": 95,
-    "fastBonus": true
-  }
-}
-```
-
-**Consumed by:** Gamification Service → awards +10 base, +5 fast bonus if < 2h, +15 if conversionLift > 0.15, +15 if KRITIK + < 2h
-
----
-
-### `campaign.sla_breached`
-
-Published by **Campaign Service** when a case exceeds its SLA deadline.
-
-```json
-{
-  "event_type": "campaign.sla_breached",
-  "timestamp": "2026-07-22T10:30:00Z",
-  "payload": {
-    "caseId": "uuid",
-    "caseCode": "CMP-2026-000010",
-    "expertId": "uuid",
-    "priority": "KRITIK"
-  }
-}
-```
-
-**Consumed by:** Gamification Service → deducts -5 points from expert
-
----
-
-### `offer.accepted`
-
-Published by **Campaign Service** when a subscriber accepts a campaign offer.
-
-```json
-{
-  "event_type": "offer.accepted",
-  "timestamp": "2026-07-22T10:30:00Z",
-  "payload": {
-    "subscriberId": "uuid",
-    "campaignId": "uuid",
-    "expertId": "uuid"
-  }
-}
-```
-
-**Consumed by:** Gamification Service (future: conversion tracking)
-
----
-
-### `offer.rejected`
-
-Published by **Campaign Service** when a subscriber rejects an offer.
-
-```json
-{
-  "event_type": "offer.rejected",
-  "timestamp": "2026-07-22T10:30:00Z",
-  "payload": {
-    "subscriberId": "uuid",
-    "campaignId": "uuid",
-    "reason": "İlgilenmiyorum"
+    "case_id": "case-001",
+    "expert_id": "a7f30000-0000-0000-0000-000000000001",
+    "priority": "KRITIK",
+    "duration_minutes": 45,
+    "target_exceeded": true,
+    "sla_breached": false
   }
 }
 ```
 
 ---
 
-### `offer.rated`
-
-Published by **Campaign Service** when a subscriber rates an accepted offer.
+### 5. `sla.warning` & `sla.breached`
+- **Yayınlayan**: Campaign Service (Cron görevi)
+- **Dinleyen**: Gamification Service, AI Service
+- **Açıklama**: SLA dolumuna %20 kaldığında veya dolduğunda fırlatılır.
 
 ```json
 {
-  "event_type": "offer.rated",
-  "timestamp": "2026-07-22T10:30:00Z",
+  "event_type": "sla.breached",
+  "timestamp": "2026-07-22T20:15:00Z",
   "payload": {
-    "subscriberId": "uuid",
-    "campaignId": "uuid",
-    "rating": 2,
-    "expertId": "uuid"
+    "case_id": "case-002",
+    "case_code": "CMP-2026-000102",
+    "assigned_expert_id": "a7f30000-0000-0000-0000-000000000001",
+    "priority": "KRITIK",
+    "sla_deadline": "2026-07-22T20:00:00Z"
   }
 }
 ```
 
-**Consumed by:** Gamification Service → if rating ≤ 2 AND expertId present → -3 points
-
 ---
 
-### `segment.override`
-
-Published by **Campaign Service** when a staff member manually overrides an AI-assigned segment.
-Used by AI Service for accuracy tracking.
-
-```json
-{
-  "event_type": "segment.override",
-  "timestamp": "2026-07-22T10:30:00Z",
-  "payload": {
-    "predictionId": "uuid",
-    "caseId": "uuid",
-    "oldSegment": "YUKSEK_DEGER",
-    "newSegment": "RISKLI_KAYIP",
-    "overriddenBy": "uuid",
-    "overriddenByName": "Burak Supervisor"
-  }
-}
-```
-
-**Note:** The AI Service is called directly via REST for segment override (PATCH /v1/ai/segment-override).
-This event is for future event-sourcing/audit purposes.
-
----
-
-### `audit.log`
-
-Published by **Campaign Service**, **AI Service**, and **Gamification Service** whenever a request is
-rejected with 403 (insufficient role), or when a critical action happens (campaign deletion, optimization
-case status change). Consumed by **Identity Service**, which persists the entry into its own `audit_logs`
-table — this is how cross-service actions end up in the centralized audit log without any service reaching
-into another service's database (database-per-service).
-
-```json
-{
-  "event_type": "audit.log",
-  "timestamp": "2026-07-22T10:30:00Z",
-  "payload": {
-    "userId": "uuid",
-    "userName": "Ahmet Yıldız",
-    "action": "UNAUTHORIZED_ACCESS",
-    "resource": "/v1/campaigns",
-    "resourceId": "uuid",
-    "result": "FAILURE",
-    "ipAddress": "10.0.0.5",
-    "details": "Required roles: SUPERVISOR, ADMIN, current: CAMPAIGN_EXPERT"
-  }
-}
-```
-
-**Consumed by:** Identity Service → inserts into `audit_logs` (see `GET /v1/audit`)
-
----
-
-### `badge.earned`
-
-Published by **Gamification Service** to Redis the moment a badge condition is met after processing
-`campaign.optimized` or `offer.rated`. Relayed to the frontend over `GET /v1/game/events?userId=<id>`
-(Server-Sent Events) so the profile screen can show a toast notification immediately.
-
-```json
-{
-  "userId": "uuid",
-  "badgeId": "hiz-ustasi",
-  "badgeName": "Hız Ustası",
-  "badgeDescription": "2 saatin altında 10 optimizasyon",
-  "earnedAt": "2026-07-22T10:30:00Z"
-}
-```
-
-**Consumed by:** Frontend (`EventSource` on `/v1/game/events?userId=<id>`) → shows a toast notification
-
----
-
-## Service Communication Summary
-
-| From | To | Method | When |
-|---|---|---|---|
-| Campaign Service | AI Service | REST (sync) | Campaign created → score subscribers |
-| Campaign Service | AI Service | REST (sync) | Case needs expert assignment |
-| Campaign Service | Gamification | Redis Pub/Sub (async) | Case completed, SLA breached, offer rated |
-| Frontend | Gateway | REST | All user interactions |
-| Gateway | All Services | REST (proxy) | Route forwarding |
-
----
-
-## Resilience Rules
-
-- If **AI Service** is unreachable when a campaign is created:
-  - Campaign is created with `isAiAnalyzed: false`
-  - A case is created with `segment: BELIRSIZ`, `priority: ORTA`
-  - The case goes to manual queue for supervisor assignment
-- If **Redis** is unreachable when publishing:
-  - Event is dropped (fire-and-forget)
-  - Service logs a warning but does NOT fail the request
-- If **Gamification Service** is down:
-  - Redis events accumulate (up to Redis memory limit)
-  - Points are NOT retroactively awarded when service comes back (demo limitation)
+### 6. `subscriber.offer.accepted` & `subscriber.offer.rejected`
+- **Yayınlayan**: Campaign Service
+- **Dinleyen**: AI Service, Gamification Service
+- **Açıklama**: Abone teklifi kabul/ret ettiğinde fırlatılır. AI abonenin geçmiş kabul sayısını günceller.

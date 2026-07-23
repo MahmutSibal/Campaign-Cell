@@ -1,0 +1,599 @@
+TURKCELL CODENIGHT 2026 
+FİNAL 
+──────────────────────────────────────── 
+CampaignCell — Turkcell Kişiselleştirilmiş Kampanya ve Öneri 
+Platformu 
+Takım 
+AI Araçları 
+3 Kişi 
+Mimari 
+Tamamen Serbest 
+Backend 
+Mikroservis (zorunlu) 
+Veritabanı 
+Zorunlu (serbest dil/framework) 
+Frontend 
+Servis başına ayrı DB (zorunlu) 
+Deployment 
+Web veya Mobil (en az 1 platform) 
+Docker Compose (zorunlu) 
+Turkcell CodeNight 2026 — FİNAL CampaignCell 
+Sayfa 2 
+İçindekiler 
+1. Proje Tanımı .....................................................................................................3 
+1.1 Senaryo ............................................................................................................... 3 
+1.2 Kullanıcı Rolleri ................................................................................................... 3 
+2. Mimari Gereksinimler ......................................................................................4 
+2.1 Zorunlu Mikroservisler ......................................................................................... 4 
+2.2 Mimari Kurallar .................................................................................................... 5 
+3. Identity Service — Fonksiyonel Gereksinimler.............................................5 
+4. Campaign Service — Fonksiyonel Gereksinimler ........................................7 
+5. AI Service — Fonksiyonel Gereksinimler ......................................................9 
+6. Gamification Service — Fonksiyonel Gereksinimler .................................. 10 
+7. Süpervizör Dashboard .................................................................................. 11 
+8. API Tasarım Beklentisi .................................................................................. 12 
+9. Servisler Arası Event Akışı ........................................................................... 12 
+10. Güvenlik Uyarısı .......................................................................................... 14 
+11. Kullanıcı Akışları ve Demo Senaryosu ...................................................... 15 
+12. Değerlendirme Kriterleri ............................................................................. 16 
+13. Kurallar ve Diskalifiye Koşulları ................................................................. 17 
+14. Teslimat ........................................................................................................ 17 
+  
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+1. Proje Tanımı 
+Türkiye'nin 7 bölgesinden finale kalan takımlar olarak, Turkcell abonelerine doğru zamanda 
+doğru teklifi sunan, yapay zeka destekli, mikroservis mimarili bir kişiselleştirilmiş kampanya ve 
+öneri platformu geliştireceksiniz. Bu final case'inde tek bir uygulama değil, birbiriyle konuşan 
+bir sistem ekosistemi inşa edeceksiniz. 
+CampaignCell dört bağımsız mikroservisten oluşur: kimlik ve yetki yönetimi (Identity), 
+kampanya yaşam döngüsü (Campaign), yapay zeka öneri motoru (AI) ve abone motivasyon 
+sistemi (Gamification). Servisler bir API Gateway arkasında çalışır ve tüm sistem Docker 
+Compose ile tek komutta ayağa kalkar. 
+1.1 Senaryo 
+Turkcell'in milyonlarca abonesi vardır ve her birinin kullanım alışkanlığı farklıdır. Herkese aynı 
+kampanyayı göndermek hem bütçe israfı hem de müşteri rahatsızlığı yaratır. Bir abonenin 
+ilgisini çekecek doğru teklifi (ek paket, tarife yükseltme, cihaz fırsatı) doğru anda sunmak, hem 
+dönüşüm oranını artırır hem de müşteri memnuniyetini yükseltir. 
+CampaignCell bu süreci akıllı hale getirir: bir abone için yapay zeka kullanım profilini analiz 
+eder, en uygun kampanyayı önerir, dönüşüm olasılığını tahmin eder ve düşük dönüşümlü 
+segmentleri kampanya uzmanına yönlendirir. Uzmanlar kampanyaları optimize ettikçe puan 
+kazanır. Yöneticiler tüm kampanya performansını ve modelin isabetini tek ekrandan izler. 
+1.2 Kullanıcı Rolleri 
+Rol 
+Kim? 
+Ne Yapar? 
+Abone 
+Kampanya Uzmanı 
+Turkcell müşterisi Kişiselleştirilmiş teklifleri görür, 
+kabul/ret eder, geri bildirim verir 
+Kampanya 
+Yöneticisi 
+Pazarlama çalışanı 
+Kampanya oluşturur, düşük 
+performanslı segmentleri optimize 
+eder, rozet kazanır 
+Admin 
+Operasyon yöneticisi 
+Dashboard izler, model isabetini ve 
+KPI'ları takip eder, manuel atama 
+yapar 
+Sistem yöneticisi 
+Uzman hesapları oluşturur, rol 
+yönetir, audit log görür 
+Sayfa 3 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+2. Mimari Gereksinimler 
+2.1 Zorunlu Mikroservisler 
+Sistem en az 4 bağımsız mikroservis ve 1 API Gateway'den oluşmalıdır: 
+┌─────────────────┐ 
+Frontend ─────▶  │   API GATEWAY   │ 
+└────────┬────────┘ 
+┌────────────┬────────┴────────┬───────────┐ 
+▼            
+▼                 
+▼            
+▼ 
+┌─────────┐ ┌─────────┐    
+┌─────────┐ ┌────────────┐ 
+│Identity │ │Campaign │    
+│   
+AI    
+│ │Gamification│ 
+│ Service │ │ Service │    
+│ Service │ │  Service   │ 
+└────┬────┘ └────┬────┘    
+└────┬────┘ └─────┬──────┘ 
+▼            
+▼              
+▼            
+▼ 
+[DB-1]        
+[DB-2]         
+[DB-3]       
+[DB-4] 
+Servis 
+Sorumluluk 
+API Gateway 
+Identity Service 
+Tek giriş noktası. Routing, rate limiting, JWT doğrulama. Hazır 
+gateway (Kong, Ocelot, Spring Cloud Gateway, Express Gateway) 
+veya kendi yazdığınız reverse proxy kabul edilir. 
+Campaign Service 
+Kayıt, giriş, token yönetimi, rol/yetki, audit log, hesap kilitleme. 
+AI Service 
+Kampanya yaşam döngüsü, segment ataması, SLA takibi, uzman 
+notu. 
+Gamification Service 
+Öneri motoru, dönüşüm tahmini, akıllı uzman ataması. 
+Puan, rozet, seviye, liderlik. Event ile tetiklenir. 
+2.2 Mimari Kurallar 
+• Database-per-service: Her servis kendi veritabanına sahip olmalıdır. Bir servis başka 
+servisin veritabanına doğrudan erişemez. DB tipi servise göre serbesttir (örn: Identity 
+için PostgreSQL, Gamification için Redis+PostgreSQL). 
+• Servisler arası iletişim: REST çağrıları minimum kabul edilir. Message queue 
+(RabbitMQ, Redis pub/sub, Kafka) kullanımı tercih edilir ve ekstra değerlendirilir. 
+• Bağımsızlık: Bir servis çöktüğünde diğer servisler çalışmaya devam etmelidir. 
+Örneğin AI Service kapalıyken kampanya oluşturulabilmeli (optimizasyon vakası 
+BELIRSIZ olarak işaretlenir, manuel atamaya düşer). 
+• Docker Compose: Tüm sistem (servisler + veritabanları + gateway) docker compose 
+up komutuyla ayağa kalkmalıdır. Bu final seviyesinde zorunludur, bonus değildir. 
+• Her servisin kendi README'si olmalı: sorumluluk, endpoint listesi, environment 
+değişkenleri. 
+Sayfa 4 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+3. Identity Service — Fonksiyonel Gereksinimler 
+3.1 Kayıt ve Giriş 
+• Müşteri/kullanıcı kaydı: Turkcell GSM numarası + OTP doğrulama (simülasyon: sabit 
+kod 1234). Kayıt alanları: ad, soyad, GSM, e-posta (opsiyonel). 
+• Personel hesapları (analist/uzman/operatör/sorumlu ve süpervizör): Admin tarafından 
+oluşturulur, e-posta + şifre ile giriş yapar. Oluştururken uzmanlık/bölge alanları atanır 
+(birden fazla seçilebilir). 
+• Şifre politikası: minimum 8 karakter, en az 1 büyük harf, 1 rakam, 1 özel karakter. 
+İhlalde hangi kuralın ihlal edildiğini belirten net hata mesajı dönmelidir. 
+• Şifreler bcrypt veya argon2 ile hash'lenmelidir. Düz metin veya MD5/SHA1 kabul 
+edilmez. 
+• Hesap kilitleme: 5 başarısız girişte hesap 15 dakika kilitlenir. Kilitli hesaba girişte 
+kalan süre bilgisi dönmelidir. 
+3.2 Token Yönetimi 
+• Access token: JWT, 15 dakika geçerlilik. Payload'da: user_id, rol, uzmanlık/bölge 
+alanları. 
+• Refresh token: 7 gün geçerlilik, veritabanında saklanır. 
+• Token rotation: Refresh token kullanıldığında yeni refresh token üretilir, eskisi 
+geçersiz kılınır. Geçersiz kılınmış bir refresh token tekrar kullanılmaya çalışılırsa o 
+kullanıcının tüm oturumları sonlandırılır (token theft koruması). 
+• Logout: refresh token geçersiz kılınır. 
+3.3 Rol ve Yetki Matrisi 
+Aşağıdaki yetki matrisi endpoint seviyesinde uygulanmalıdır. Yetkisiz erişim denemesi 403 
+dönmeli ve audit log'a yazılmalıdır: 
+İşlem 
+Müşteri 
+Personel 
+Süpervizör 
+Kampanya oluşturma 
+Admin 
+✓ – 
+Kendi kayıtlarını görme – 
+✓ 
+✓ (atanan) – 
+Durum değiştirme 
+✓ (tümü) – 
+✓ (tümü) 
+✓ 
+Manuel atama – – 
+✓ – 
+Kategori/tür değiştirme (AI 
+✓ – 
+override) 
+✓ 
+✓ – – 
+Dashboard görüntüleme – – 
+Personel hesabı oluşturma 
+✓ – – 
+✓ 
+Audit log görüntüleme – – 
+✓ – 
+3.4 Audit Log 
+Aşağıdaki işlemler audit log'a kaydedilmelidir: 
+• Başarılı ve başarısız giriş denemeleri – 
+✓ 
+Sayfa 5 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+• Hesap kilitlenmesi 
+• Rol değişiklikleri 
+• Yetkisiz erişim denemeleri (403) 
+• Kampanya silme ve kritik durum değişiklikleri 
+Her log kaydında bulunması gereken alanlar: kim (user_id), ne (işlem tipi), ne zaman 
+(timestamp), nereden (IP), sonuç (başarılı/başarısız), detay (ilgili kaynak id'si). 
+Sayfa 6 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+4. Campaign Service — Fonksiyonel Gereksinimler 
+4.1 Kampanya Oluşturma 
+• Kampanya oluşturma: başlık, tip (EK_PAKET, TARIFE_YUKSELTME, 
+CIHAZ_FIRSATI, SADAKAT), hedef segment, indirim oranı, geçerlilik süresi. 
+• Kampanya bir abone segmentine hedeflendiğinde otomatik olarak AI Service'e 
+gönderilir: her abone için dönüşüm olasılığı, öneri skoru ve segment atanır. 
+• AI Service erişilemez durumdaysa kampanya yine oluşturulmalı (segment: 
+BELIRSIZ, öncelik: ORTA) ve manuel optimizasyon kuyruğuna düşmelidir. 
+• Kampanya numarası: benzersiz, okunabilir (örn: CMP-2026-000123). 
+4.2 Optimizasyon Vakası Yaşam Döngüsü 
+Düşük dönüşümlü kampanyalar bir optimizasyon vakasına dönüşür. Durumlar ve geçiş 
+kuralları aşağıdaki state machine'e uymalıdır. Kural dışı geçiş 422 dönmelidir: 
+Mevcut Durum 
+Hedef Durum 
+Kim Yapabilir 
+YENI 
+Koşul 
+ATANDI 
+ATANDI 
+Sistem (AI) / Yönetici Uzman belirlendi 
+OPTIMIZE_EDILIYOR 
+Uzman 
+Uzman çalışmaya 
+başladı 
+OPTIMIZE_EDILIYOR 
+TEST_EDILIYOR 
+Uzman 
+TEST_EDILIYOR 
+OPTIMIZE_EDILIYOR 
+Sistem 
+A/B testi başlatıldı 
+OPTIMIZE_EDILIYOR 
+Test sonuçlandı 
+TAMAMLANDI 
+Uzman 
+Optimizasyon notu 
+zorunlu 
+TAMAMLANDI 
+YAYINDA 
+Yönetici 
+YAYINDA 
+Onay verildi 
+ARSIVLENDI 
+Sistem 
+4.3 Segment Türleri ve Öncelik 
+Geçerlilik doldu 
+• Türler/kategoriler: YUKSEK_DEGER, RISKLI_KAYIP, YENI_ABONE, PASIF, 
+BELIRSIZ. 
+• Segment AI tarafından atanır; uzman veya yönetici değiştirebilir. 
+• Uzman segment değiştirdiğinde bu değişiklik AI Service'e bildirilmelidir (doğruluk 
+metriği için). 
+• Öncelik seviyeleri: DUSUK, ORTA, YUKSEK, KRITIK. AI dönüşüm potansiyeline 
+göre atar: RISKLI_KAYIP segment → minimum YUKSEK. Yönetici manuel 
+değiştirebilir. 
+4.4 SLA Kuralları 
+Öncelik 
+SLA Süresi 
+Aşım Durumunda 
+KRITIK 
+2 saat 
+Vaka kırmızı işaretlenir, yönetici panelinde en 
+üstte görünür 
+YUKSEK 
+8 saat 
+Vaka turuncu işaretlenir 
+ORTA 
+24 saat 
+Görsel uyarı 
+Sayfa 7 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+DUSUK 
+72 saat 
+Görsel uyarı 
+SLA süresi vaka oluşturma anından itibaren sayılır. Optimizasyon tamamlanınca durur. Kalan 
+SLA hem uzman hem yönetici ekranında görünür olmalıdır. 
+4.5 Abone Geri Bildirimi 
+• Aboneye kişiselleştirilmiş teklif bildirimi gönderilir (simülasyon: uygulama içi). 
+• Abone teklifi 'Kabul' veya 'İlgilenmiyorum' olarak yanıtlar; yanıt dönüşüm verisine 
+işlenir. 
+• Abone 'ilgilenmiyorum' derse benzer kampanyaların öneri skoru düşer. 
+4.6 Abone Memnuniyeti 
+• Teklif etkileşimi sonrasında abone deneyimi 1-5 yıldız puanlar (alakasız teklif → 
+düşük puan). 
+• Puanlama tek seferliktir. Puan verildiğinde Gamification Service'e event gönderilir. 
+Sayfa 8 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+5. AI Service — Fonksiyonel Gereksinimler 
+Bu servis final case'inin kalbidir. Üç görevi vardır ve her üçü de zorunludur. 
+5.1 Görev 1: Öneri Skorlama 
+• Girdi: abone profili (kullanım verisi, mevcut tarife, geçmiş kabuller, harcama). Çıktı: 
+her kampanya için öneri skoru (0.0-1.0) + dönüşüm olasılığı. 
+• Öneri skoru 0.60'ın altındaki kampanyalar aboneye gösterilmez; skor > 0.80 ise 
+öncelikli gösterilir. 
+• Yaklaşım serbesttir: (a) kendi eğittiğiniz klasik ML modeli (scikit-learn vb.), (b) kural 
+tabanlı + ML hibrit, (c) LLM API entegrasyonu. Hepsi kabul edilir. 
+• Kendi veri setinizle model eğiten takımlar ekstra değerlendirilir. Bu durumda eğitim 
+verinizi repository'de paylaşmanız ve README'de eğitim sürecini anlatmanız gerekir. 
+• Eğitim/test verisini kendiniz oluşturacaksınız: gerçekçi Türkçe abone profili örnekleri 
+ve kampanya kabul/ret geçmişi (örn: 'yüksek veri kullanımı + sık paket alımı', 'düşük 
+kullanım + şikayet geçmişi'). Minimum 100 örnek önerilir; AI araçlarıyla üretebilirsiniz. 
+5.2 Görev 2: Segment Sınıflandırma 
+• Girdi: abone davranış verisi. Çıktı: YUKSEK_DEGER, RISKLI_KAYIP, 
+YENI_ABONE, PASIF. 
+• RISKLI_KAYIP (churn riski) segmenti otomatik yüksek öncelik alır; uzman önce 
+bunlara odaklanır. 
+5.3 Görev 3: Akıllı Uzman Ataması 
+Kategorisi/skoru belirlenen optimizasyon vakası, uygun kişiye otomatik atanmalıdır. Atama bir 
+skorlama algoritmasına dayanmalıdır. Örnek formül (kendi formülünüzü tasarlayabilirsiniz): 
+skor = (uzmanlik_eslesme × 0.5) + (bosluk_orani × 0.3) + (performans × 0.2) 
+• uzmanlik_eslesme: Uzmanın uzmanlık alanı (örn: churn önleme) vaka segmentiyle 
+eşleşiyorsa 1, değilse 0. 
+• bosluk_orani: 1 - (aktif vaka / maksimum kapasite). Kapasite uzman başına 10 aktif 
+vaka. 
+• performans: Uzmanın ortalama dönüşüm artışı skoru. 
+• En yüksek skorlu uzmana atama yapılır. Kapasite yoksa vaka kuyruğa alınır. 
+• Yönetici her zaman manuel atama yapabilir. 
+5.4 Doğruluk Takibi 
+• Personel veya süpervizör AI'ın atadığı kategoriyi/türü değiştirirse bu 'yanlış 
+sınıflandırma' olarak kaydedilmelidir. 
+• Süpervizör dashboard'unda AI doğruluk oranı gösterilmelidir: doğru / toplam × 100. 
+• Kategori bazlı doğruluk kırılımı (hangi türde ne kadar isabetli) ekstra değerlendirilir. 
+Sayfa 9 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+6. Gamification Service — Fonksiyonel Gereksinimler 
+Personelin motivasyonunu artıran puan, rozet, seviye ve liderlik sistemi. Bu servis Campaign 
+Service'ten gelen event'lerle çalışır — doğrudan çağrı değil, olay tabanlı mimari beklenir. 
+6.1 Puan Tablosu 
+Olay 
+Puan 
+Optimizasyon tamamlandı (TAMAMLANDI) 
+Koşul 
++10 
+Hızlı optimizasyon bonusu 
+Her tamamlama 
++5 
+Dönüşüm hedefi aşıldı 
+2 saatten kısa 
++15 
+KRITIK vaka SLA içinde tamamlandı 
+Hedef üstü sonuç 
++15 
+SLA aşımı 
+SLA içinde -5 
+Abone düşük puan verdi (alakasız teklif) 
+Her aşım -3 
+6.2 Rozetler 
+Rozet 
+1-2 yıldız 
+Kazanılma Koşulu 
+İlk Kampanya 
+Hız Ustası 
+İlk optimizasyonu tamamlama 
+Dönüşüm Kralı 
+2 saatin altında 10 optimizasyon 
+Maratoncu 
+10 kampanyada hedef aşımı 
+Churn Avcısı 
+Bir günde 20 optimizasyon 
+Uzman 
+10 RISKLI_KAYIP vakayı kurtarma 
+Tek segmentte 50 optimizasyon 
+6.3 Seviye Sistemi 
+Seviye 
+Puan Aralığı 
+Görsel 
+Bronz 
+0 – 499 
+Gümüş 
+Bronz rozet/çerçeve 
+500 – 1.499 
+Altın 
+Gümüş rozet/çerçeve 
+1.500 – 2.999 
+Platin 
+Altın rozet/çerçeve 
+3.000+ 
+Platin rozet/çerçeve 
+6.4 Liderlik Tablosu ve Profil 
+• Günlük ve haftalık liderlik tablosu: ilk 10 kişi, puan sıralı. 
+• Liderlik tablosu gerçek zamanlı veya sayfa yenilemede güncel olmalıdır. 
+• Profil ekranı: toplam puan, seviye, kazanılan rozetler, günlük/haftalık sıralama, 
+çözülen vaka sayısı, ortalama puan. 
+• Rozet kazanıldığı anda kişiye görsel bildirim gösterilmelidir (toast/modal). 
+Sayfa 10 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+7. Süpervizör Dashboard 
+Süpervizör rolündeki kullanıcılar için operasyonel görünürlük ekranı. Aşağıdaki bileşenler 
+zorunludur: 
+• Kampanya dağılımı: segment bazlı pasta/bar grafik 
+• Dönüşüm oranları ve trend 
+• SLA uyum oranı + SLA aşmış aktif vakalar 
+• AI doğruluk metriği: dönüşüm tahmini isabet oranı 
+• Uzman performansı: tamamlanan vaka, ortalama dönüşüm artışı, süre 
+• Bekleyen optimizasyon kuyruğu: BELIRSIZ veya kapasite bekleyen, manuel atama 
+Sayfa 11 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+8. API Tasarım Beklentisi 
+Bu dokümanda tüm endpoint listesi verilmemektedir. API'nizi RESTful prensiplere uygun 
+olarak kendiniz tasarlayacaksınız — tasarım kaliteniz değerlendirme konusudur. Aşağıda 
+beklentiyi netleştiren örnekler verilmiştir. 
+8.1 Gateway Routing Örneği 
+/api/v1/auth/**      
+→  Identity Service 
+/api/v1/campaigns/** →  Campaign Service 
+/api/v1/ai/**        
+→  AI Service 
+/api/v1/game/**      
+→  Gamification Service 
+8.2 Örnek Endpointler 
+Method 
+Endpoint 
+Açıklama 
+POST 
+/api/v1/campaigns 
+Kampanya oluştur (AI öneri analizi 
+tetiklenir) 
+POST 
+/api/v1/ai/recommend 
+Öneri skorlama (Campaign Service 
+çağırır) 
+GET 
+/api/v1/game/leaderboard?period=daily 
+Günlük liderlik tablosu 
+GET 
+/api/v1/subscribers/:id/offers 
+Geri kalan tüm endpoint'leri kendiniz tasarlayın. Standart response formatı kullanın ({ success, 
+Aboneye özel teklifler 
+data, error }) ve API'nizi Swagger/OpenAPI ile dokümante edin. 
+9. Servisler Arası Event Akışı 
+Servisler arası iletişimde olay (event) tabanlı tasarım beklenir. Aşağıda bir uçtan uca örnek 
+verilmiştir; diğer tüm event'leri kendiniz tasarlayıp dokümante edeceksiniz. Event tasarımınız 
+değerlendirme konusudur. 
+9.1 Örnek: 'campaign.optimized' Akışı 
+1. Uzman vakayı TAMAMLANDI durumuna çeker (Campaign Service) → 2. Campaign Service 
+'campaign.optimized' event'i yayınlar → 3. Gamification Service dinler, süreyi ve dönüşümü 
+hesaplar → 4. Puan ekler (+10, hedef aşıldıysa +15) → 5. Rozet koşullarını kontrol eder, 
+'badge.earned' üretir → 6. Frontend'e bildirim yansır 
+9.2 Örnek Event Payload 
+{ 
+"event_type": "campaign.optimized", 
+"timestamp": "2026-07-18T14:22:10Z", 
+"payload": { 
+"case_id": "CMP-2026-000123", 
+"expert_id": "a7f3...", 
+"segment": "RISKLI_KAYIP", 
+"priority": "YUKSEK", 
+"conversion_lift": 0.18, 
+Sayfa 12 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+"created_at": "2026-07-18T13:40:02Z", 
+"completed_at": "2026-07-18T14:22:10Z" 
+} 
+} 
+Tasarlamanız gereken diğer olaylara örnekler: kampanya oluşturuldu, segment değiştirildi (AI 
+doğruluk takibi), abone teklifi yanıtladı, SLA aşıldı. Event'lerinizi README veya ayrı bir 
+EVENTS.md dosyasında dokümante edin. 
+Sayfa 13 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+10. Güvenlik Uyarısı 
+JÜRİ CANLI GÜVENLİK TESTİ YAPACAKTIR 
+olun. 
+Demo sırasında jüri üyeleri sisteminize kasıtlı saldırı senaryoları deneyecektir. Hazırlıklı 
+Denenecek senaryolara örnekler (tam liste değildir): 
+• SQL injection: form alanlarına ' OR 1=1 -- benzeri girdiler 
+• Yetkisiz endpoint erişimi: müşteri token'ıyla süpervizör endpoint'i çağırma 
+• Başka kullanıcının verisine erişim: kayıt ID değiştirerek başkasının verisini görme 
+(IDOR) 
+• Token manipülasyonu: süresi dolmuş veya değiştirilmiş JWT ile istek 
+• Geçersiz kılınmış refresh token'ın yeniden kullanımı 
+• XSS: metin alanına script etiketi enjeksiyonu 
+• Brute-force: ardışık hızlı giriş denemeleri (rate limit testi) 
+Sayfa 14 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+11. Kullanıcı Akışları ve Demo Senaryosu 
+11.1 Abone Akışı 
+1. GSM + OTP ile giriş → 2. Kişiselleştirilmiş teklifi gör → 3. AI önerisi: en uygun kampanya + 
+indirim → 4. Teklifi kabul et veya reddet → 5. Kabul edilen kampanyayı takip et → 6. Deneyimi 
+1-5 yıldız puanla 
+11.2 Kampanya Uzmanı Akışı 
+1. Panele giriş → 2. Atanan optimizasyon vakalarını öncelik sıralı gör → 3. Vakayı aç: AI 
+segment + dönüşüm tahmini görünür → 4. A/B testi yap → 5. Optimizasyonu notla tamamla 
+→ 6. Puan ve rozet kazan 
+11.3 Zorunlu Demo Senaryosu 
+Sunumunuzda aşağıdaki uçtan uca akışı canlı göstermeniz zorunludur: 
+1. docker compose up ile tüm sistemi ayağa kaldır → 2. Kampanya uzmanı olarak bir 
+kampanya oluştur ve segmente hedefle → 3. AI'ın öneri skoru + segment + dönüşüm tahmini 
+atamasını göster → 4. Düşük performanslı segmentin doğru uzmana atandığını göster → 5. 
+Uzman olarak optimizasyonu tamamla → 6. Puanın liderlik tablosuna yansıdığını göster → 7. 
+Bir servisi kapat (docker stop) ve sistemin geri kalanının çalıştığını kanıtla → 8. Jürinin 
+güvenlik testlerine hazır ol 
+Servis kapatma adımı final jürisinin en çok önem verdiği andır: mikroservis mimarinizin 
+gerçekten bağımsız çalıştığını burada kanıtlarsınız. 
+Sayfa 15 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+12. Değerlendirme Kriterleri 
+Toplam puan 100 üzerinden hesaplanır. Final değerlendirmesi 6 kategoride yapılır: 
+Kategori 
+Ağırlık 
+Değerlendirme Detayı 
+Mimari ve Kod Kalitesi 
+25 puan 
+Fonksiyonellik 
+Mikroservis bağımsızlığı, database-per-service 
+uyumu, event tasarımı, gateway kurgusu, clean 
+code, SOLID, anlamlı commit geçmişi 
+25 puan 
+Güvenlik 
+Dört servisin zorunlu özelliklerinin çalışması, AI 
+görevleri, state machine, gamification kuralları, 
+edge case yönetimi 
+15 puan 
+UI/UX Kalitesi 
+Jüri güvenlik testlerinden geçme, token rotation, rol 
+yetki matrisi uyumu, audit log, rate limiting 
+10 puan 
+Test ve Dokümantasyon 
+Görsel tutarlılık, responsive tasarım, 
+loading/error/empty state, kullanıcı deneyimi akışı 
+10 puan 
+Sunum ve Canlı Demo 
+Unit/integration test, Swagger/OpenAPI, 
+README'ler, EVENTS.md, AI yaklaşım dokümanı 
+15 puan 
+Zorunlu demo senaryosunun eksiksiz gösterimi 
+(servis kapatma dahil), mimari anlatımı, teknik 
+kararların savunulması 
+12.1 Bonus Puanlama (+20 puan) 
+Aşağıdaki her özellik ek puan getirir. Toplam bonus 20 puanı aşamaz. 
+• Kendi eğittiğiniz ML modeli (eğitim verisi + süreç dokümante edilmiş) (+8) 
+• Message queue ile event iletimi (RabbitMQ, Kafka, Redis pub/sub) (+5) 
+• Kategori bazlı AI doğruluk kırılımı (süpervizör panelinde) (+3) 
+• Gerçek zamanlı bildirimler (WebSocket/SSE) (+2) 
+• CI/CD pipeline (GitHub Actions vb.) (+2) 
+Sayfa 16 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+13. Kurallar ve Diskalifiye Koşulları 
+13.1 Genel Kurallar 
+• Takım: 3 kişi, değiştirilemez 
+• Tüm takımlar aynı case'i çözer 
+• AI araçları (Copilot, ChatGPT, Claude, Cursor vb.) tamamen serbest 
+• Boş proje scaffold/boilerplate ile başlamak serbest 
+• Önceden yazılmış iş mantığı kodu ile başlamak yasak 
+13.2 Diskalifiye Koşulları 
+• Monolith mimari (tek servis, tek uygulama) değerlendirme dışıdır 
+• docker compose up ile sistem ayağa kalkmıyorsa değerlendirme dışıdır 
+• AI servisi mock/hardcoded ise (her girdiye sabit çıktı) değerlendirme dışıdır 
+• Servisler tek/ortak veritabanı paylaşıyorsa değerlendirme dışıdır 
+• Çalışmayan (build edilemeyen) projeler değerlendirme dışıdır 
+14. Teslimat 
+14.1 Kod 
+• GitHub/GitLab repository (public veya davetli erişim). Monorepo veya servis başına 
+ayrı repo — ikisi de kabul. 
+• Ana branch'te çalışır durumda kod, anlamlı commit geçmişi 
+• Kök dizinde docker-compose.yml: tüm servisler + veritabanları + gateway 
+• .env.example dosyaları (servis başına) 
+14.2 Dokümantasyon 
+• Ana README: sistem genel bakış, mimari diyagram, kurulum (docker compose up + 
+seed), demo kullanıcı bilgileri 
+• Servis başına README: sorumluluk, endpoint listesi, environment değişkenleri 
+• EVENTS.md: tasarladığınız tüm event'ler ve payload'ları 
+• AI yaklaşım dokümanı: hangi yöntemi seçtiniz, neden, nasıl çalışıyor. Model 
+eğittiyseniz eğitim verisi ve süreci 
+• Swagger/OpenAPI dokümantasyonu (en az Campaign Service ve AI servisleri için) 
+14.3 Sunum (Maks. 15 Dakika) 
+• Canlı demo (6-7 dk): Zorunlu demo senaryosunun tamamı (bölüm 11.3) 
+• Mimari anlatımı (4 dk): servis sorumlulukları, event akışı, AI yaklaşımı, güvenlik 
+önlemleri 
+• Zorluklar ve çözümler (2 dk) 
+• Soru-cevap ve güvenlik testi (jüri yönetiminde) 
+Sayfa 17 
+Turkcell CodeNight 2026 — FİNAL 
+CampaignCell 
+Sorularınız için mentorlara danışabilirsiniz. Mentorlar teknik yönlendirme yapabilir ancak kod 
+yazamazlar. 
+Finalde başarılar. 🎯 Doğru teklif, doğru kişiye. 
+Sayfa 18 

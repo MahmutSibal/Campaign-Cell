@@ -1,0 +1,16 @@
+node_modules
+dist
+.next
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+.vscode
+.idea
+.agents
+.claude
+.windsurf
+skills-lock.json
+coverage

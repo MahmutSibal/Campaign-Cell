@@ -1,68 +1,40 @@
-# Campaign Service
+# CampaignCell — Campaign Service
 
-Kampanya yönetimi, optimizasyon vakası iş akışı, A/B deneyleri ve abone teklif servisi.
+Campaign Service, kampanya oluşturma, optimizasyon vakaları yaşam döngüsü (state machine), SLA takibi, A/B testi ve müşteri geri bildirimlerinin yönetildiği çekirdek iş mantığı mikroservisidir.
 
-## Port: 3002
+## 🚀 Sorumluluklar
 
-## Sorumluluklar
-- Kampanya CRUD (DRAFT → PUBLISHED → ARCHIVED)
-- **Optimizasyon vakası state machine** (7 durum, geçiş kuralları ve rol kontrolleri)
-- SLA takibi ve uyarı sistemi (KRITIK: 2s, YUKSEK: 8s, ORTA: 24s, DUSUK: 72s)
-- A/B deney yönetimi ve kazanan belirleme
-- Abone teklif gönderme, kabul/red/puanlama
-- Redis pub/sub ile gamification-service'e event yayını
-- AI-service ile servis-içi iletişim (`scoreCampaignForSubscriber`)
+- **Kampanya Yönetimi**: Kampanya oluşturma (CMP-2026-XXXXXX kod üretimi), tip belirleme (`EK_PAKET`, `TARIFE_YUKSELTME`, `CIHAZ_FIRSATI`, `SADAKAT`), indirim oranı ve hedef segment tanımlama.
+- **Optimizasyon Vakası Yaşam Döngüsü (State Machine)**:
+  - Durumlar: `YENI` → `ATANDI` → `OPTIMIZE_EDILIYOR` → `TEST_EDILIYOR` → `TAMAMLANDI` → `YAYINDA` → `ARSIVLENDI`.
+  - Kural dışı durum geçişlerinde HTTP 422 Unprocessable Entity döner.
+- **SLA Takibi**:
+  - `KRITIK`: 2 Saat
+  - `YUKSEK`: 8 Saat
+  - `ORTA`: 24 Saat
+  - `DUSUK`: 72 Saat
+  - SLA dolumuna %20 kala uyarır (`sla.warning`), süre dolduğunda ihlal olarak işaretler (`sla.breached`).
+- **Segment Override & AI Feedback Loop**: Süpervizör veya Uzman segment değiştirdiğinde AI servisine RabbitMQ üzerinden haber verilir.
+- **A/B Testi & Feedback**: Kampanyalar için A/B testi varyant sonuçları saklanır; abone kabul/ret ve 1-5 yıldız memnuniyet puanları kaydolur.
 
-## State Machine (Optimizasyon Vakaları)
+## 📡 API Endpointleri
 
+| Metot | Endpoint | Yetki | Açıklama |
+|---|---|---|---|
+| `POST` | `/api/v1/campaigns` | Uzman, Süpervizör, Admin | Yeni kampanya oluşturur (AI servisine event atar) |
+| `GET` | `/api/v1/campaigns` | Auth | Tüm kampanyaları listeler |
+| `GET` | `/api/v1/campaigns/:id` | Auth | Kampanya detayını getirir |
+| `GET` | `/api/v1/cases` | Auth | Optimizasyon vakalarını listeler |
+| `POST` | `/api/v1/cases/:id/assign` | Süpervizör, Admin | Vakaya uzman atar |
+| `PATCH` | `/api/v1/cases/:id/status` | Uzman, Süpervizör | Vaka durumunu günceller (State Machine) |
+| `PATCH` | `/api/v1/cases/:id/segment` | Uzman, Süpervizör | Segment override yapar (AI'a bildirilir) |
+| `POST` | `/api/v1/feedback` | Abone | Teklif yanıtı (Kabul/Red) ve memnuniyet puanı verir |
+| `POST` | `/api/v1/ab-tests` | Uzman, Süpervizör | A/B test varyant sonuçlarını kaydeder |
+
+## ⚙️ Environment Değişkenleri
+
+```env
+PORT=3002
+DATABASE_URL=postgresql://campaigncell_user:campaigncell_secret_2026@campaign-db:5432/campaign_db?schema=public
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
 ```
-YENI → ATANDI → OPTIMIZE_EDILIYOR → TEST_EDILIYOR
-                                  ↓              ↓
-                              TAMAMLANDI    OPTIMIZE_EDILIYOR
-                                  ↓
-                              YAYINDA → ARSIVLENDI
-```
-
-| Geçiş | İzin Verilen Roller |
-|-------|---------------------|
-| YENI → ATANDI | SUPERVISOR, ADMIN |
-| ATANDI → OPTIMIZE_EDILIYOR | CAMPAIGN_EXPERT |
-| OPTIMIZE_EDILIYOR → TAMAMLANDI | CAMPAIGN_EXPERT |
-| TAMAMLANDI → YAYINDA | SUPERVISOR, ADMIN |
-| YAYINDA → ARSIVLENDI | SUPERVISOR, ADMIN |
-
-## Endpointler
-
-| Yöntem | Path | Açıklama |
-|--------|------|----------|
-| GET/POST | /v1/campaigns | Listele / oluştur |
-| GET/PATCH/DELETE | /v1/campaigns/:id | Detay / güncelle / sil |
-| POST | /v1/campaigns/:id/publish | Yayınla |
-| POST | /v1/campaigns/:id/archive | Arşivle |
-| GET | /v1/cases | Vaka listesi (uzman → sadece kendi) |
-| GET | /v1/cases/:id | Vaka detayı + notlar |
-| PATCH | /v1/cases/:id | Durum geçişi (state machine) |
-| POST | /v1/cases/:id/assign | Uzman ata (AI önerisi ile) |
-| POST | /v1/cases/:id/complete | Tamamla (note zorunlu) |
-| POST | /v1/cases/:id/notes | Not ekle |
-| GET | /v1/subscribers | Abone listesi |
-| GET | /v1/subscribers/:id | Profil + teklifler |
-| POST | /v1/subscribers/:id/offers/:campaignId/accept | Teklif kabul |
-| POST | /v1/subscribers/:id/offers/:campaignId/reject | Teklif red |
-| POST | /v1/subscribers/:id/offers/:campaignId/rate | Puanla (1-5) |
-| GET/POST | /v1/experiments | Deney listesi / oluştur |
-| POST | /v1/experiments/:id/conclude | Kazananı belirle |
-| GET | /v1/analytics/dashboard | Dashboard metrikleri |
-| GET | /v1/analytics/conversion-trend | Dönüşüm trend grafiği |
-| GET | /v1/analytics/campaign-distribution | Kampanya dağılımı |
-| GET | /v1/analytics/expert-performance | Uzman performansı |
-| GET | /v1/analytics/sla-compliance | SLA uyum raporu |
-| GET | /v1/analytics/expert-kpis | Uzman KPI'ları |
-
-## Redis Events Yayınları
-
-- `campaign.optimized` — Vaka tamamlandığında
-- `campaign.sla_breached` — SLA aşıldığında
-- `offer.accepted` — Teklif kabul edildiğinde
-- `offer.rejected` — Teklif reddedildiğinde
-- `offer.rated` — Teklif puanlandığında

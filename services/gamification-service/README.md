@@ -1,60 +1,35 @@
-# Gamification Service
+# CampaignCell — Gamification Service
 
-Puan sistemi, rozet yönetimi, liderlik tablosu ve Redis event tüketici servisi.
+Gamification Service, kampanya uzmanlarının ve çalışanların motivasyonunu artırmak amacıyla puan, rozet, seviye ve liderlik tablosu (leaderboard) yönetimi sunan olay tabanlı (event-driven) mikroservistir.
 
-## Port: 3004
+## 🚀 Sorumluluklar
 
-## Sorumluluklar
-- Redis pub/sub ile async event tüketimi (campaign.optimized, campaign.sla_breached, offer.rated)
-- Puan motoru: vaka tipi, hız bonusu, dönüşüm hedefi, segment bazlı bonus
-- Rozet motoru: idempotent kontrol ile 8 rozet türü
-- Seviye hesabı: BRONZ → GÜMÜŞ → ALTIN → PLATIN
-- Günlük/Haftalık liderlik tablosu
+- **Olay Tabanlı Mimari (Event-Driven)**: Diğer servislerden gelen RabbitMQ event'lerini dinler, puan ve rozetleri otomatik hesaplar (doğrudan REST çağrısı gerektirmez).
+- **Puan Kuralları**:
+  - Optimizasyon tamamlandı: **+10 Puan**
+  - Hızlı optimizasyon bonusu (2 saatten kısa): **+5 Puan**
+  - Dönüşüm hedefi aşıldı: **+15 Puan**
+  - KRİTİK vaka SLA içinde tamamlandı: **+15 Puan**
+  - SLA aşımı: **-5 Puan**
+  - Müşteriden düşük yıldız (1-2 yıldız): **-3 Puan**
+- **Rozetler**: `ILK_KAMPANYA`, `HIZ_USTASI`, `DONUSUM_KRALI`, `MARATONCU`, `CHURN_AVCISI`, `UZMAN`.
+- **Seviyeler**: `Bronz` (0-499), `Gümüş` (500-1499), `Altın` (1500-2999), `Platin` (3000+).
+- **Liderlik Tablosu (Leaderboard)**: Uzmanların toplam puanlarına göre anlık veya günlük/haftalık sıralaması.
+- **Idempotency**: Mükerrer puan eklenmesini önlemek için benzersiz `eventId` takibi.
 
-## Puan Kuralları (Case: `campaign.optimized`)
+## 📡 API Endpointleri
 
-| Kural | Puan |
-|-------|------|
-| Vaka tamamlama | +10 |
-| Hızlı tamamlama (<2 saat) | +5 |
-| Dönüşüm hedefi aşımı (>%15 lift) | +15 |
-| Kritik vaka SLA içinde | +15 |
-| SLA aşımı | -5 |
-| Abone düşük puan (1-2/5) | -3 |
+| Metot | Endpoint | Açıklama |
+|---|---|---|
+| `GET` | `/api/v1/gamification/health` | Servis sağlık kontrolü |
+| `GET` | `/api/v1/gamification/leaderboard` | Liderlik sıralamasını getirir |
+| `GET` | `/api/v1/gamification/experts/:expertId/points` | Uzmanın toplam puanını ve seviyesini getirir |
+| `GET` | `/api/v1/gamification/experts/:expertId/badges` | Uzmanın kazandığı rozetleri listeler |
 
-## Seviyer
+## ⚙️ Environment Değişkenleri
 
-| Seviye | Puan Eşiği |
-|--------|------------|
-| BRONZ | 0 |
-| GÜMÜŞ | 500 |
-| ALTIN | 1500 |
-| PLATIN | 3000 |
-
-## Rozetler
-
-| ID | İsim | Koşul |
-|----|------|-------|
-| ilk-kampanya | İlk Kampanya 🏆 | completedCases ≥ 1 |
-| hiz-ustasi | Hız Ustası ⚡ | fastCompletions ≥ 10 |
-| donusum-krali | Dönüşüm Kralı 👑 | conversionTargetHits ≥ 10 |
-| maratoncu | Maratoncu 🏃 | 24 saatte 20+ optimizasyon |
-| churn-avcisi | Churn Avcısı 🎯 | churnCasesResolved ≥ 10 |
-| uzman | Uzman 🌟 | completedCases ≥ 50 |
-| guvenilir | Güvenilir 🛡️ | completedCases ≥ 100 |
-| efsane | Efsane ⭐ | totalPoints ≥ 3000 |
-
-## Endpointler
-
-| Yöntem | Path | Açıklama |
-|--------|------|----------|
-| GET | /v1/game/leaderboard?period=daily\|weekly | Liderlik tablosu |
-| GET | /v1/game/profile/:userId | Profil + rozetler + sıralama |
-| GET | /v1/game/badges | Tüm rozetler |
-| GET | /v1/game/points-history/:userId | Puan geçmişi |
-
-## Redis Kanalları (Dinlenen)
-
-- `campaign.optimized` → `handleCampaignOptimized()`
-- `campaign.sla_breached` → `handleSlaBreached()`
-- `offer.rated` → `handleOfferRated()`
+```env
+PORT=3003
+DATABASE_URL=postgresql://campaigncell_user:campaigncell_secret_2026@gamification-db:5432/gamification_db?schema=public
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+```

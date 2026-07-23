@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeaderboardPeriodEnum {
+  DAILY
+  WEEKLY
+  ALL_TIME
+}
+
+model PointsTransaction {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  expertId  String   @map("expert_id") @db.Uuid
+  caseId    String?  @map("case_id") @db.Uuid
+  points    Int
+  reason    String   @db.VarChar(50)
+  segment   String?  @db.VarChar(30)
+  eventId   String?  @unique @map("event_id") @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("points_transactions")
+}
+
+model Badge {
+  id          Int         @id @default(autoincrement())
+  code        String      @unique @db.VarChar(30)
+  name        String      @db.VarChar(100)
+  description String?     @db.Text
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  expertId String   @map("expert_id") @db.Uuid
+  badgeId  Int      @map("badge_id")
+  earnedAt DateTime @default(now()) @map("earned_at") @db.Timestamptz
+
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([expertId, badgeId])
+  @@map("user_badges")
+}
+
+model Level {
+  id        Int    @id @default(autoincrement())
+  name      String @unique @db.VarChar(20)
+  minPoints Int    @map("min_points")
+  maxPoints Int?   @map("max_points")
+
+  @@map("levels")
+}
+
+model LeaderboardSnapshot {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  period       LeaderboardPeriodEnum
+  snapshotDate DateTime              @map("snapshot_date") @db.Date
+  expertId     String                @map("expert_id") @db.Uuid
+  totalPoints  Int                   @map("total_points")
+  rank         Int
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("leaderboard_snapshots")
+}

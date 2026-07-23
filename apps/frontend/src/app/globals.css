@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F4F6FB;
+  --foreground: #0F172A;
+  --card-bg: #FFFFFF;
+  --card-border: #E2E8F0;
+  --turkcell-yellow: #FFC72C;
+  --turkcell-blue: #0057B8;
+  --turkcell-navy: #002561;
+}
+
+.dark {
+  --background: #050810;
+  --foreground: #F8FAFC;
+  --card-bg: rgba(12, 18, 34, 0.75);
+  --card-border: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 87, 184, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 87, 184, 0.3);
+  border-radius: 3px;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===== TURKCELL ENTERPRISE CARDS (LIGHT & DARK) ===== */
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .glass-card {
+  background: rgba(12, 18, 34, 0.75);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 87, 184, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 87, 184, 0.1);
+}
+
+.glass-modal {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  box-shadow: 0 20px 60px rgba(0, 37, 97, 0.15);
+}
+
+.dark .glass-modal {
+  background: rgba(8, 14, 30, 0.95);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 199, 44, 0.2);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== HERO GRADIENT ===== */
+.hero-gradient {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 87, 184, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+}
+
+.dark .hero-gradient {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 87, 184, 0.25) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 50%, rgba(255, 199, 44, 0.08) 0%, transparent 50%),
+    linear-gradient(180deg, #050810 0%, #080E1A 50%, #050810 100%);
+}
+
+/* ===== GRADIENT TEXT ===== */
+.gradient-text-turkcell {
+  background: linear-gradient(135deg, #002561 0%, #0057B8 50%, #D99B00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dark .gradient-text-turkcell {
+  background: linear-gradient(135deg, #FFC72C 0%, #F2A900 50%, #0057B8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== BADGE ANIMATIONS ===== */
+.badge-pulse {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.float-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ===== SCORE RING ===== */
+.score-ring {
+  transform: rotate(-90deg);
+}
+
+/* ===== SLA COUNTDOWN ===== */
+.sla-critical {
+  animation: sla-blink 1s ease-in-out infinite;
+}
+
+@keyframes sla-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

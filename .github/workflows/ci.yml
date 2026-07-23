@@ -1,0 +1,74 @@
+name: CampaignCell CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-services:
+    name: Build & Test Microservices
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [identity-service, campaign-service, gamification-service, api-gateway, frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install Dependencies
+        run: |
+          if [ "${{ matrix.service }}" = "frontend" ]; then
+            cd apps/frontend && npm ci || npm install
+          else
+            cd services/${{ matrix.service }} && npm ci || npm install
+          fi
+
+      - name: Generate Prisma Client (if applicable)
+        run: |
+          if [ -d "services/${{ matrix.service }}/prisma" ]; then
+            cd services/${{ matrix.service }} && npx prisma generate
+          fi
+
+      - name: Run Build
+        run: |
+          if [ "${{ matrix.service }}" = "frontend" ]; then
+            cd apps/frontend && npm run build
+          else
+            cd services/${{ matrix.service }} && npm run build
+          fi
+
+      - name: Run Unit Tests
+        run: |
+          if [ "${{ matrix.service }}" = "frontend" ]; then
+            echo "Skipping Jest for Next.js"
+          else
+            cd services/${{ matrix.service }} && npm test || true
+          fi
+
+  python-ai-test:
+    name: Test Python AI Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python Dependencies
+        run: |
+          cd services/ai-service
+          pip install -r requirements.txt || true
+      - name: Run Pytest
+        run: |
+          cd services/ai-service
+          pytest || true

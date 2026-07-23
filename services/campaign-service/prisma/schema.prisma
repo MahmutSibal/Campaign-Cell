@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CampaignTypeEnum {
+  EK_PAKET
+  TARIFE_YUKSELTME
+  CIHAZ_FIRSATI
+  SADAKAT
+}
+
+enum TargetSegmentEnum {
+  YUKSEK_DEGER
+  RISKLI_KAYIP
+  YENI_ABONE
+  PASIF
+  BELIRSIZ
+}
+
+enum CampaignStatusEnum {
+  DRAFT
+  ACTIVE
+  MANUAL_OPTIMIZATION_REQUIRED
+  COMPLETED
+  ARCHIVED
+}
+
+enum CasePriorityEnum {
+  DUSUK
+  ORTA
+  YUKSEK
+  KRITIK
+}
+
+enum CaseStatusEnum {
+  YENI
+  ATANDI
+  OPTIMIZE_EDILIYOR
+  TEST_EDILIYOR
+  TAMAMLANDI
+  YAYINDA
+  ARSIVLENDI
+}
+
+enum AssignedByEnum {
+  AI
+  SUPERVISOR
+}
+
+enum FeedbackResponseEnum {
+  ACCEPTED
+  REJECTED
+}
+
+model Campaign {
+  id                      String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                    String             @unique @db.VarChar(20)
+  name                    String             @db.VarChar(200)
+  description             String?            @db.Text
+  type                    CampaignTypeEnum
+  discountPercent         Decimal?           @map("discount_percent") @db.Decimal(5, 2)
+  targetSegment           TargetSegmentEnum? @map("target_segment")
+  startDate               DateTime?          @map("start_date") @db.Date
+  endDate                 DateTime?          @map("end_date") @db.Date
+  status                  CampaignStatusEnum @default(DRAFT)
+  aiRecommendationScore   Decimal?           @map("ai_recommendation_score") @db.Decimal(4, 3)
+  aiConversionProbability Decimal?           @map("ai_conversion_probability") @db.Decimal(4, 3)
+  createdBy               String             @map("created_by") @db.Uuid
+  createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  optimizationCases   OptimizationCase[]
+  subscriberFeedbacks SubscriberFeedback[]
+
+  @@map("campaigns")
+}
+
+model OptimizationCase {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseCode           String           @unique @map("case_code") @db.VarChar(20)
+  campaignId         String           @map("campaign_id") @db.Uuid
+  segment            String           @db.VarChar(20)
+  priority           CasePriorityEnum
+  status             CaseStatusEnum   @default(YENI)
+  assignedExpertId   String?          @map("assigned_expert_id") @db.Uuid
+  aiScore            Decimal?         @map("ai_score") @db.Decimal(4, 3)
+  aiConversionProb   Decimal?         @map("ai_conversion_prob") @db.Decimal(4, 3)
+  aiReasoning        String?          @map("ai_reasoning") @db.Text
+  isAiMisclassified   Boolean          @default(false) @map("is_ai_misclassified")
+  optimizationNote   String?          @map("optimization_note") @db.Text
+  slaDeadline        DateTime         @map("sla_deadline") @db.Timestamptz
+  slaBreached        Boolean          @default(false) @map("sla_breached")
+  slaWarned          Boolean          @default(false) @map("sla_warned")
+  conversionLift     Decimal?         @map("conversion_lift") @db.Decimal(5, 3)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  assignedAt         DateTime?        @map("assigned_at") @db.Timestamptz
+  completedAt        DateTime?        @map("completed_at") @db.Timestamptz
+
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  assignments CampaignAssignment[]
+  histories   CampaignHistory[]
+  abTests     AbTestExperiment[]
+
+  @@map("optimization_cases")
+}
+
+model CampaignAssignment {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId          String         @map("case_id") @db.Uuid
+  expertId        String         @map("expert_id") @db.Uuid
+  assignmentScore Decimal?       @map("assignment_score") @db.Decimal(4, 3)
+  assignedBy      AssignedByEnum @map("assigned_by")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  case OptimizationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_assignments")
+}
+
+model Segment {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique @db.VarChar(20)
+  description String? @db.Text
+
+  @@map("segments")
+}
+
+model CampaignHistory {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId     String   @map("case_id") @db.Uuid
+  fromStatus String?  @map("from_status") @db.VarChar(30)
+  toStatus   String   @map("to_status") @db.VarChar(30)
+  changedBy  String?  @map("changed_by") @db.Uuid
+  note       String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  case OptimizationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_history")
+}
+
+model AbTestExperiment {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId              String    @map("case_id") @db.Uuid
+  variantADesc        String?   @map("variant_a_desc") @db.Text
+  variantBDesc        String?   @map("variant_b_desc") @db.Text
+  variantAConversion  Decimal?  @map("variant_a_conversion") @db.Decimal(4, 3)
+  variantBConversion  Decimal?  @map("variant_b_conversion") @db.Decimal(4, 3)
+  winner              String?   @db.VarChar(1)
+  startedAt           DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt             DateTime? @map("ended_at") @db.Timestamptz
+
+  case OptimizationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("ab_test_experiments")
+}
+
+model SubscriberFeedback {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId      String               @map("campaign_id") @db.Uuid
+  subscriberId    String               @map("subscriber_id") @db.Uuid
+  response        FeedbackResponseEnum
+  rejectionReason String?              @map("rejection_reason") @db.Text
+  rating          Int?                 @db.SmallInt
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("subscriber_feedback")
+}

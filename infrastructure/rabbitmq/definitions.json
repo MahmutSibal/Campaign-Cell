@@ -1,0 +1,187 @@
+{
+  "rabbit_version": "3.12.0",
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "users": [
+    {
+      "name": "guest",
+      "password_hash": "BM82j8zU64TjK9dFzY9N1pY9+",
+      "tags": ["administrator"]
+    }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "campaigncell.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "campaigncell.events.dlx",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "q.gamification.campaign-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "campaigncell.events.dlx"
+      }
+    },
+    {
+      "name": "q.ai.campaign-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "campaigncell.events.dlx"
+      }
+    },
+    {
+      "name": "q.campaign.ai-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "campaigncell.events.dlx"
+      }
+    },
+    {
+      "name": "q.notifications.all",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "campaigncell.events.dlx"
+      }
+    },
+    {
+      "name": "q.dlq.failed-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.gamification.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "campaign.optimized",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.gamification.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "campaign.assigned",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.gamification.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "sla.breached",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.gamification.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "subscriber.feedback.submitted",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.ai.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "campaign.created",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.ai.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "campaign.optimization.required",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.ai.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "segment.changed",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.ai.campaign-events",
+      "destination_type": "queue",
+      "routing_key": "subscriber.offer.#",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.campaign.ai-events",
+      "destination_type": "queue",
+      "routing_key": "ai.prediction.created",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.campaign.ai-events",
+      "destination_type": "queue",
+      "routing_key": "ai.service.recovered",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events",
+      "vhost": "/",
+      "destination": "q.notifications.all",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {}
+    },
+    {
+      "source": "campaigncell.events.dlx",
+      "vhost": "/",
+      "destination": "q.dlq.failed-events",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {}
+    }
+  ]
+}
